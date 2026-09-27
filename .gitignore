@@ -7,3 +7,4 @@ appsettings.*.local.json
 .env
 publish/
 *.zip
+SUBMISSION_FORM.md

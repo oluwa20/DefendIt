@@ -10,6 +10,8 @@ Afterwards you get a readiness report: a radar chart across six dimensions, per-
 with a stronger model answer, delivery stats, top risks and a five-step prep plan.
 English and French.
 
+![DefendIt home page with a preview of the defense room](docs/screenshot-home.jpg)
+
 ## Try it
 
 - **Live:** https://defendit.onrender.com (free hosting: the first visit after idle can take ~1 minute to wake up)
