@@ -8,7 +8,7 @@ like a real jury. They follow up when you dodge, and they confront you with cont
 own document — *"Your abstract says 95% accuracy, but Table 4.2 shows 89.3%. Which is it?"*
 Afterwards you get a readiness report: a radar chart across six dimensions, per-question feedback
 with a stronger model answer, delivery stats, top risks and a five-step prep plan.
-English and French.
+English, French and Arabic (right-to-left).
 
 ![DefendIt home page with a preview of the defense room](docs/screenshot-home.jpg)
 

@@ -24,25 +24,55 @@ else if (session?.Report is null)
 else
 {
     var r = session.Report;
-    <article class="report">
-        <header class="report-head">
-            <div>
-                <p class="report-doc">@session.Brief.Title</p>
-                <h1 class="score-line"><span class="score">@r.ReadinessScore</span><span class="score-of">/100</span> @L.T(Lang, "ready", "prêt")</h1>
-                <p class="verdict">@r.Verdict</p>
-                <p class="muted small">@session.CreatedUtc.ToString("d MMM yyyy") · @(Lang == "fr" ? "Français" : "English") · @DifficultyName(session.Difficulty) · @L.T(Lang, "evaluated by", "évalué par") @r.ProviderUsed</p>
+    var band = r.ReadinessScore >= 70 ? "good" : r.ReadinessScore >= 45 ? "mid" : "low";
+    <article class="report" dir="@L.Dir(Lang)" lang="@Lang">
+        <header class="rp-hero">
+            <div class="rp-gauge @band" role="img" aria-label="@($"{r.ReadinessScore}/100")">
+                <svg viewBox="0 0 140 140" aria-hidden="true">
+                    <circle cx="70" cy="70" r="58" class="g-track" />
+                    <circle cx="70" cy="70" r="58" class="g-fill" stroke-dasharray="@($"{r.ReadinessScore / 100.0 * 364.4:0.0} 364.4")" transform="rotate(-90 70 70)" />
+                </svg>
+                <div class="g-num"><span>@r.ReadinessScore</span><small>/100</small></div>
+                <div class="g-label">@L.T(Lang, "ready", "prêt")</div>
             </div>
-            <div class="radar-wrap">
-                <canvas id="radar" aria-label="@L.T(Lang, "Radar chart of six defense dimensions", "Graphique radar des six dimensions")" role="img"></canvas>
+            <div class="rp-summary">
+                <p class="report-doc" dir="auto">@session.Brief.Title</p>
+                <h1 class="verdict">@r.Verdict</h1>
+                <div class="chips">
+                    <span class="chip">@session.CreatedUtc.ToString("d MMM yyyy")</span>
+                    <span class="chip">@L.Name(Lang)</span>
+                    <span class="chip">@DifficultyName(session.Difficulty)</span>
+                    <span class="chip chip-quiet">@L.T(Lang, "evaluated by", "évalué par") @r.ProviderUsed</span>
+                </div>
             </div>
         </header>
 
-        <ul class="dims">
-            @foreach (var d in r.Dimensions)
-            {
-                <li><span>@DimLabel(d.Key)</span><meter min="0" max="10" value="@d.Value"></meter><b>@d.Value</b></li>
-            }
-        </ul>
+        <section class="rp-grid">
+            <div class="card radar-card">
+                <canvas id="radar" aria-label="@L.T(Lang, "Radar chart of six defense dimensions", "Graphique radar des six dimensions")" role="img"></canvas>
+            </div>
+            <div class="card">
+                <ul class="dims">
+                    @foreach (var d in r.Dimensions)
+                    {
+                        <li>
+                            <span class="dim-name">@DimLabel(d.Key)</span>
+                            <span class="dim-bar"><i style="width:@(d.Value * 10)%"></i></span>
+                            <b>@d.Value</b>
+                        </li>
+                    }
+                </ul>
+                <h3 class="card-h">@L.T(Lang, "How you sounded", "Votre expression orale")</h3>
+                <dl class="delivery">
+                    <dt>@L.T(Lang, "Pace", "Débit")</dt>
+                    <dd>@(r.Delivery.WordsPerMinute > 0 ? $"{r.Delivery.WordsPerMinute:0} {L.T(Lang, "words per minute", "mots par minute")}" : L.T(Lang, "n/a (typed answers)", "n/d (réponses écrites)")) <span class="muted">@PaceHint(r.Delivery.WordsPerMinute)</span></dd>
+                    <dt>@L.T(Lang, "Filler words", "Mots de remplissage")</dt>
+                    <dd>@r.Delivery.FillerWords <span class="muted">@(Lang switch { "fr" => "(euh, genre, en fait, du coup)", "ar" => "(يعني، امم، آه، طيب)", _ => "(um, uh, like, you know)" })</span></dd>
+                    <dt>@L.T(Lang, "Average answer", "Réponse moyenne")</dt>
+                    <dd>@r.Delivery.AvgAnswerSeconds.ToString("0") s <span class="muted">@L.T(Lang, "(aim for 45–90 s)", "(visez 45–90 s)")</span></dd>
+                </dl>
+            </div>
+        </section>
 
         @if (session.Brief.Inconsistencies.Count > 0)
         {
@@ -53,8 +83,9 @@ else
                     @foreach (var i in session.Brief.Inconsistencies)
                     {
                         <li class="sev-@(i.Severity?.ToLowerInvariant())">
-                            <p>@i.Description</p>
-                            <p class="where">@i.LocationA ↔ @i.LocationB <span class="sev">@SeverityName(i.Severity)</span></p>
+                            <span class="sev">@SeverityName(i.Severity)</span>
+                            <p dir="auto">@i.Description</p>
+                            <p class="where" dir="auto">@i.LocationA ↔ @i.LocationB</p>
                         </li>
                     }
                 </ul>
@@ -69,21 +100,34 @@ else
                 var f = r.Feedback[i];
                 var t = session.Turns[i];
                 var ex = Panel.Get(t.ExaminerId);
-                <div class="qcard" id="q@(i)">
+                <div class="qcard" id="q@(i)" style="--seat:@ex.Color">
                     <div class="qcard-head">
-                        <span class="qby" style="--seat:@ex.Color">@ex.Name@(t.IsFollowUp ? L.T(Lang, " (follow-up)", " (relance)") : "")</span>
-                        <span class="qscore s@(f.Score >= 7 ? "hi" : f.Score >= 4 ? "mid" : "lo")">@f.Score/10</span>
+                        <div class="q-face"><ExaminerAvatar Id="@ex.Id" Label="@ex.Name" /></div>
+                        <div class="q-who">
+                            <span class="q-name">@ex.Name</span>
+                            <span class="q-meta">@L.T(Lang, "Question", "Question", "السؤال") @(i + 1)@(t.IsFollowUp ? L.T(Lang, " (follow-up)", " (relance)") : "")</span>
+                        </div>
+                        <span class="qscore s@(f.Score >= 7 ? "hi" : f.Score >= 4 ? "mid" : "lo")">@f.Score<small>/10</small></span>
                     </div>
-                    <p class="qtext">@t.Question</p>
+                    <p class="qtext" dir="auto">@t.Question</p>
                     <details>
                         <summary>@L.T(Lang, "Your answer", "Votre réponse")</summary>
-                        <p class="yours">@(string.IsNullOrWhiteSpace(t.Answer) ? L.T(Lang, "(no answer)", "(pas de réponse)") : t.Answer)</p>
+                        <p class="yours" dir="auto">@(string.IsNullOrWhiteSpace(t.Answer) ? L.T(Lang, "(no answer)", "(pas de réponse)") : t.Answer)</p>
                     </details>
-                    <dl>
-                        <dt>@L.T(Lang, "What worked", "Ce qui a fonctionné")</dt><dd>@f.WhatWorked</dd>
-                        <dt>@L.T(Lang, "What was missing", "Ce qui manquait")</dt><dd>@f.WhatWasMissing</dd>
-                        <dt>@L.T(Lang, "A stronger answer", "Une réponse plus solide")</dt><dd class="stronger">@f.StrongerAnswer</dd>
-                    </dl>
+                    <div class="fb-grid">
+                        <div class="fb fb-good">
+                            <h4>@L.T(Lang, "What worked", "Ce qui a fonctionné")</h4>
+                            <p dir="auto">@f.WhatWorked</p>
+                        </div>
+                        <div class="fb fb-miss">
+                            <h4>@L.T(Lang, "What was missing", "Ce qui manquait")</h4>
+                            <p dir="auto">@f.WhatWasMissing</p>
+                        </div>
+                    </div>
+                    <div class="stronger">
+                        <h4>@L.T(Lang, "A stronger answer", "Une réponse plus solide")</h4>
+                        <p dir="auto">@f.StrongerAnswer</p>
+                    </div>
 
                     @if (retryIndex == i)
                     {
@@ -116,36 +160,27 @@ else
                     }
                     else if (retryIndex is null)
                     {
-                        <button class="btn btn-quiet btn-small" @onclick="() => StartRetry(i)">@L.T(Lang, "Retry this question", "Retenter cette question")</button>
+                        <button class="btn btn-quiet btn-small q-retry" @onclick="() => StartRetry(i)">@L.T(Lang, "Retry this question", "Retenter cette question")</button>
                     }
                     @if (improved.TryGetValue(i, out var before))
                     {
-                        <p class="improved">@L.T(Lang, $"Retried: {before}/10 → {f.Score}/10", $"Nouvel essai : {before}/10 → {f.Score}/10")</p>
+                        <p class="improved">@L.T(Lang, $"Retried: {before}/10 → {f.Score}/10", $"Nouvel essai : {before}/10 → {f.Score}/10", $"إعادة المحاولة: {before}/10 ← {f.Score}/10")</p>
                     }
                 </div>
             }
         </section>
 
-        <section class="block two-col">
-            <div>
-                <h2>@L.T(Lang, "How you sounded", "Votre expression orale")</h2>
-                <dl class="delivery">
-                    <dt>@L.T(Lang, "Pace", "Débit")</dt>
-                    <dd>@(r.Delivery.WordsPerMinute > 0 ? $"{r.Delivery.WordsPerMinute:0} {L.T(Lang, "words per minute", "mots par minute")}" : L.T(Lang, "n/a (typed answers)", "n/d (réponses écrites)")) <span class="muted">@PaceHint(r.Delivery.WordsPerMinute)</span></dd>
-                    <dt>@L.T(Lang, "Filler words", "Mots de remplissage")</dt>
-                    <dd>@r.Delivery.FillerWords <span class="muted">@(Lang == "fr" ? "(euh, genre, en fait, du coup)" : "(um, uh, like, you know)")</span></dd>
-                    <dt>@L.T(Lang, "Average answer", "Réponse moyenne")</dt>
-                    <dd>@r.Delivery.AvgAnswerSeconds.ToString("0") s <span class="muted">@L.T(Lang, "(aim for 45–90 s)", "(visez 45–90 s)")</span></dd>
-                </dl>
+        <section class="block rp-grid">
+            <div class="card">
                 <h2>@L.T(Lang, "Top risks", "Risques principaux")</h2>
                 <ul class="risks">
-                    @foreach (var risk in r.TopRisks) { <li>@risk</li> }
+                    @foreach (var risk in r.TopRisks) { <li dir="auto">@risk</li> }
                 </ul>
             </div>
-            <div>
+            <div class="card">
                 <h2>@L.T(Lang, "Your prep plan", "Votre plan de préparation")</h2>
                 <ol class="plan">
-                    @foreach (var step in r.PrepPlan) { <li>@step</li> }
+                    @foreach (var step in r.PrepPlan) { <li dir="auto">@step</li> }
                 </ol>
             </div>
         </section>
@@ -207,7 +242,7 @@ else
         await JS.InvokeVoidAsync("defendit.renderRadar", "radar", labels, values);
     }
 
-    private string DimLabel(string key) => Lang == "fr" ? Dimensions.French.GetValueOrDefault(key, key) : key;
+    private string DimLabel(string key) => Lang switch { "fr" => Dimensions.French.GetValueOrDefault(key, key), "ar" => Dimensions.Arabic.GetValueOrDefault(key, key), _ => key };
 
     private string DifficultyName(string d) => d switch
     {

@@ -109,7 +109,7 @@ public class TtsService(IHttpClientFactory httpFactory, IOptions<TtsOptions> tts
 
     private async Task<SpeechAudio?> Gemini(string key, string text, string examinerId, string lang, CancellationToken ct)
     {
-        var language = lang == "fr" ? "French" : "English";
+        var language = Prompts.LanguageName(lang);
         var prompt = $"Read this aloud in {language}, {Tone(examinerId)}. Speak naturally, at a conversational pace:\n{text}";
         var body = JsonSerializer.Serialize(new
         {

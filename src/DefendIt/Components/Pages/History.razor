@@ -34,8 +34,8 @@
             {
                 <li>
                     <a href="/report/@s.Id">
-                        <span class="s-title">@s.Brief.Title</span>
-                        <span class="s-meta">@s.CreatedUtc.ToString("d MMM yyyy") · @(s.Language == "fr" ? "Français" : "English")</span>
+                        <span class="s-title" dir="auto">@s.Brief.Title</span>
+                        <span class="s-meta">@s.CreatedUtc.ToString("d MMM yyyy") · @L.Name(s.Language)</span>
                         <span class="s-score">@(s.Report?.ReadinessScore.ToString() ?? "–")<small>/100</small></span>
                     </a>
                 </li>

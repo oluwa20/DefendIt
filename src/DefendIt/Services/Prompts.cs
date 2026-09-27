@@ -14,7 +14,7 @@ public static class Prompts
 
     public const string JsonOnly = "Return ONLY valid JSON matching the schema. No markdown, no commentary.";
 
-    public static string LanguageName(string lang) => lang == "fr" ? "French" : "English";
+    public static string LanguageName(string lang) => lang switch { "fr" => "French", "ar" => "Modern Standard Arabic", _ => "English" };
 
     public static string DifficultyRule(string difficulty) => difficulty switch
     {

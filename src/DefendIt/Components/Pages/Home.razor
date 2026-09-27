@@ -9,6 +9,8 @@
 
 <PageTitle>DefendIt — rehearse your defense</PageTitle>
 
+<div dir="@L.Dir(lang)" lang="@lang">
+
 @if (busy)
 {
     <section class="reading" aria-live="polite">
@@ -73,6 +75,7 @@ else
                 <legend>@L.T(lang, "Defense language", "Langue de la soutenance")</legend>
                 <button type="button" class="@(lang == "en" ? "on" : "")" aria-pressed="@(lang == "en")" @onclick='() => lang = "en"'>English</button>
                 <button type="button" class="@(lang == "fr" ? "on" : "")" aria-pressed="@(lang == "fr")" @onclick='() => lang = "fr"'>Français</button>
+                <button type="button" class="@(lang == "ar" ? "on" : "")" aria-pressed="@(lang == "ar")" @onclick='() => lang = "ar"' lang="ar">العربية</button>
             </fieldset>
             <fieldset class="toggle" aria-label="Jury">
                 <legend>@L.T(lang, "Jury temperament", "Tempérament du jury")</legend>
@@ -129,6 +132,8 @@ else
     </section>
 }
 
+</div>
+
 @code {
     private const long MaxBytes = 20 * 1024 * 1024;
     private string lang = "en";
@@ -146,7 +151,7 @@ else
         var uri = Nav.ToAbsoluteUri(Nav.Uri);
         var q = Microsoft.AspNetCore.WebUtilities.QueryHelpers.ParseQuery(uri.Query);
         if (q.TryGetValue("simulateOutage", out var v) && v == "primary") Llm.SimulatePrimaryOutage = true;
-        if (q.TryGetValue("lang", out var l) && l == "fr") lang = "fr";
+        if (q.TryGetValue("lang", out var l) && (l == "fr" || l == "ar")) lang = l!;
     }
 
     private string ExaminerBlurb(string id) => id switch
@@ -227,7 +232,8 @@ else
         var doc = await Task.Run(() => Pdf.Extract(new MemoryStream(bytes)));
 
         status = L.T(lang, $"{doc.PageCount} pages. Checking your numbers, claims and tables against each other.",
-            $"{doc.PageCount} pages. Vérification croisée de vos chiffres, affirmations et tableaux.");
+            $"{doc.PageCount} pages. Vérification croisée de vos chiffres, affirmations et tableaux.",
+            $"{doc.PageCount} صفحات. مقارنة أرقامك وادعاءاتك وجداولك بعضها ببعض.");
         StateHasChanged();
 
         var brief = await Analyzer.AnalyzeAsync(doc, lang);

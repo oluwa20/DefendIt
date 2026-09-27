@@ -1,8 +1,141 @@
 namespace DefendIt.Services;
 
-/// <summary>Tiny EN/FR string helper for the UI.</summary>
+/// <summary>Tiny EN/FR/AR string helper for the UI. Arabic comes from <see cref="Ar"/> unless passed explicitly.</summary>
 public static class L
 {
-    public static string T(string lang, string en, string fr) => lang == "fr" ? fr : en;
-    public static string SpeechLang(string lang) => lang == "fr" ? "fr-FR" : "en-US";
+    public static string T(string lang, string en, string fr, string? ar = null) => lang switch
+    {
+        "fr" => fr,
+        "ar" => ar ?? Ar.Get(en) ?? en,
+        _ => en,
+    };
+
+    public static string SpeechLang(string lang) => lang switch { "fr" => "fr-FR", "ar" => "ar-SA", _ => "en-US" };
+    public static string Dir(string lang) => lang == "ar" ? "rtl" : "ltr";
+    public static string Name(string lang) => lang switch { "fr" => "Français", "ar" => "العربية", _ => "English" };
+}
+
+/// <summary>Arabic (Modern Standard) UI strings, keyed by the English text.</summary>
+public static class Ar
+{
+    public static string? Get(string en) => Map.TryGetValue(en, out var v) ? v : null;
+
+    private static readonly Dictionary<string, string> Map = new()
+    {
+        [" (follow-up)"] = " (سؤال متابعة)",
+        ["(a little slow; 120–160 is comfortable)"] = "(بطيء قليلاً؛ ١٢٠–١٦٠ وتيرة مريحة)",
+        ["(aim for 45–90 s)"] = "(استهدف ٤٥–٩٠ ثانية)",
+        ["(comfortable pace)"] = "(وتيرة مريحة)",
+        ["(fast; slow down for the jury)"] = "(سريع؛ تمهّل من أجل اللجنة)",
+        ["(no answer)"] = "(لا توجد إجابة)",
+        ["A stronger answer"] = "إجابة أقوى",
+        ["AI feedback is practice guidance, not an official grade. Your jury decides."] = "ملاحظات الذكاء الاصطناعي إرشاد للتدريب وليست درجة رسمية. لجنتك هي التي تقرر.",
+        ["Answer by voice"] = "أجب بصوتك",
+        ["Answered by: "] = "أجاب: ",
+        ["Average answer"] = "متوسط الإجابة",
+        ["Camera"] = "الكاميرا",
+        ["Camera is off"] = "الكاميرا متوقفة",
+        ["Cancel"] = "إلغاء",
+        ["Connecting to the panel…"] = "جارٍ الاتصال باللجنة…",
+        ["Defense language"] = "لغة المناقشة",
+        ["Defense report"] = "تقرير المناقشة",
+        ["Defense room"] = "قاعة المناقشة",
+        ["Delete this session"] = "احذف هذه الجلسة",
+        ["Design, data, validity, metrics"] = "التصميم والبيانات والصلاحية والمقاييس",
+        ["Done answering"] = "انتهيت من الإجابة",
+        ["Drop your PDF here, or click to choose"] = "أسقط ملف PDF هنا، أو انقر للاختيار",
+        ["End & get report"] = "إنهاء وعرض التقرير",
+        ["External examiner"] = "الممتحن الخارجي",
+        ["Extracting the text, page by page."] = "استخراج النص، صفحة بصفحة.",
+        ["Fallback: "] = "احتياطي: ",
+        ["Filler words"] = "كلمات الحشو",
+        ["Fix these in the document or prepare an explanation. A real jury will notice."] = "صحّح هذه النقاط في المستند أو جهّز تفسيراً لها. اللجنة الحقيقية ستلاحظها.",
+        ["Follow-up"] = "متابعة",
+        ["How you sounded"] = "كيف بدا أداؤك الشفهي",
+        ["I'd rather type my answers"] = "أفضّل كتابة إجاباتي",
+        ["Inconsistencies the panel found"] = "التناقضات التي وجدتها اللجنة",
+        ["Inconsistency in your document"] = "تناقض في مستندك",
+        ["It may have been deleted from this device."] = "ربما حُذف من هذا الجهاز.",
+        ["Join the defense"] = "انضم إلى المناقشة",
+        ["Jury temperament"] = "طبع اللجنة",
+        ["Listening"] = "يستمع",
+        ["Listening…"] = "يستمع…",
+        ["Long document: examiners focused on key chapters."] = "مستند طويل: ركّز الممتحنون على الفصول الأساسية.",
+        ["Methodologist"] = "خبير المنهجية",
+        ["Motivation, objectives, contribution"] = "الدافع والأهداف والإسهام",
+        ["New defense"] = "مناقشة جديدة",
+        ["No defense in progress"] = "لا توجد مناقشة جارية",
+        ["Opening your report…"] = "جارٍ فتح تقريرك…",
+        ["Pace"] = "الوتيرة",
+        ["Print or save as PDF"] = "اطبع أو احفظ كملف PDF",
+        ["Question by question"] = "سؤالاً بسؤال",
+        ["Radar chart of six defense dimensions"] = "مخطط راداري لستة أبعاد للمناقشة",
+        ["Re-scoring your answer…"] = "جارٍ إعادة تقييم إجابتك…",
+        ["Ready. Click to choose another file."] = "جاهز. انقر لاختيار ملف آخر.",
+        ["Realistic"] = "واقعية",
+        ["Rehearse your defense before it counts."] = "تدرّب على مناقشتك قبل اليوم الحاسم.",
+        ["Repeat the question"] = "أعد السؤال",
+        ["Report not found"] = "لم يُعثر على التقرير",
+        ["Retry this question"] = "أعد محاولة هذا السؤال",
+        ["Save"] = "حفظ",
+        ["Saved on this device"] = "محفوظ على هذا الجهاز",
+        ["See my sessions"] = "عرض جلساتي",
+        ["Skip to my answer"] = "انتقل إلى إجابتي",
+        ["Something unexpected went wrong while reading your document. Try again."] = "حدث خطأ غير متوقع أثناء قراءة مستندك. حاول مرة أخرى.",
+        ["Something unexpected went wrong. Your answers so far are kept. Try again."] = "حدث خطأ غير متوقع. إجاباتك حتى الآن محفوظة. حاول مرة أخرى.",
+        ["Start my defense"] = "ابدأ مناقشتي",
+        ["Supervisor"] = "المشرف",
+        ["Supportive"] = "داعمة",
+        ["Taking notes"] = "يدوّن ملاحظات",
+        ["Text-based PDF, up to 20 MB"] = "ملف PDF نصي، حتى ٢٠ ميغابايت",
+        ["The examiners could not be reached right now. Wait a few seconds, then try again."] = "تعذّر الوصول إلى الممتحنين الآن. انتظر بضع ثوانٍ ثم حاول مرة أخرى.",
+        ["The examiners could not be reached right now. Your answers so far are kept. Try again in a few seconds."] = "تعذّر الوصول إلى الممتحنين الآن. إجاباتك حتى الآن محفوظة. حاول مجدداً بعد بضع ثوانٍ.",
+        ["The examiners could not be reached. Try again."] = "تعذّر الوصول إلى الممتحنين. حاول مرة أخرى.",
+        ["The panel is deliberating on your defense…"] = "اللجنة تتداول بشأن مناقشتك…",
+        ["The panel is reading your document…"] = "اللجنة تقرأ مستندك…",
+        ["The panel is ready for you."] = "اللجنة جاهزة لاستقبالك.",
+        ["This PDF has no readable text — upload a text-based PDF."] = "لا يحتوي ملف PDF هذا على نص مقروء — ارفع ملف PDF نصياً.",
+        ["This browser has no speech recognition, so you will type your answers. Use Chrome for voice."] = "لا يدعم هذا المتصفح التعرّف على الكلام، لذا ستكتب إجاباتك. استخدم Chrome للإجابة بالصوت.",
+        ["This file could not be read as a PDF. Check it opens in a PDF reader and try again."] = "تعذّرت قراءة هذا الملف كملف PDF. تأكد أنه يُفتح في قارئ PDF ثم حاول مرة أخرى.",
+        ["This file is larger than 20 MB. Upload a smaller PDF."] = "حجم هذا الملف أكبر من ٢٠ ميغابايت. ارفع ملف PDF أصغر.",
+        ["Toggle camera"] = "تشغيل/إيقاف الكاميرا",
+        ["Top risks"] = "أبرز المخاطر",
+        ["Tough"] = "صارمة",
+        ["Try again"] = "حاول مرة أخرى",
+        ["Try with a sample thesis"] = "جرّب بأطروحة نموذجية",
+        ["Type instead"] = "اكتب بدلاً من ذلك",
+        ["Type your answer as you would say it."] = "اكتب إجابتك كما كنت ستقولها.",
+        ["Typing"] = "يكتب",
+        ["Upload a document to start one."] = "ارفع مستنداً لبدء واحدة.",
+        ["Upload your thesis or project report. Three AI examiners read all of it, then question you out loud — following up when you dodge, and pointing out where your own document contradicts itself."] =
+            "ارفع أطروحتك أو تقرير مشروعك. يقرؤه ثلاثة ممتحنين بالذكاء الاصطناعي كاملاً، ثم يسألونك بصوت عالٍ — يلاحقونك بأسئلة المتابعة حين تتهرّب، ويشيرون إلى المواضع التي يناقض فيها مستندك نفسه.",
+        ["Voice recognition uses your browser's speech service. Answer out loud; your mic stops after 4 seconds of silence. You can type instead at any time."] =
+            "يعتمد التعرّف على الصوت على خدمة الكلام في متصفحك. أجب بصوت عالٍ؛ يتوقف الميكروفون بعد ٤ ثوانٍ من الصمت. يمكنك الكتابة بدلاً من ذلك في أي وقت.",
+        ["What is new, limits, and your contradictions"] = "الجديد والحدود وتناقضاتك",
+        ["What was missing"] = "ما كان ناقصاً",
+        ["What worked"] = "ما نجح",
+        ["Which AI model answered the last request"] = "نموذج الذكاء الاصطناعي الذي أجاب عن الطلب الأخير",
+        ["Yes, delete it"] = "نعم، احذفها",
+        ["You"] = "أنت",
+        ["Your abstract claims 95% accuracy, but Table 4.2 on page 6 shows 89.3%. Which figure is correct?"] =
+            "يذكر ملخصك دقة ٩٥٪، لكن الجدول ٤٫٢ في الصفحة ٦ يُظهر ٨٩٫٣٪. أي الرقمين هو الصحيح؟",
+        ["Your answer"] = "إجابتك",
+        ["Your camera is a mirror for you only. Nothing is recorded."] = "كاميرتك مرآة لك وحدك. لا يُسجَّل أي شيء.",
+        ["Your document is processed in memory and never stored on our server. Saved reports stay on your device."] =
+            "يُعالَج مستندك في الذاكرة ولا يُخزَّن أبداً على خادمنا. تبقى التقارير المحفوظة على جهازك.",
+        ["Your panel"] = "لجنتك",
+        ["Your prep plan"] = "خطة استعدادك",
+        ["evaluated by"] = "قيّمه",
+        ["high"] = "مرتفعة",
+        ["is asking again…"] = "يعيد طرح السؤال…",
+        ["is speaking"] = "يتحدث",
+        ["low"] = "منخفضة",
+        ["medium"] = "متوسطة",
+        ["n/a (typed answers)"] = "غير متاح (إجابات مكتوبة)",
+        ["ready"] = "جاهزية",
+        ["realistic jury"] = "لجنة واقعية",
+        ["supportive jury"] = "لجنة داعمة",
+        ["tough jury"] = "لجنة صارمة",
+        ["words per minute"] = "كلمة في الدقيقة",
+    };
 }

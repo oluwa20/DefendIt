@@ -22,7 +22,7 @@
 else if (phase == Phase.Briefing)
 {
     @* ---------- Green room: the pre-call screen ---------- *@
-    <section class="lobby">
+    <section class="lobby" dir="@L.Dir(Lang)" lang="@Lang">
         <div class="lobby-preview">
             <div class="lobby-video @(camOn ? "on" : "")">
                 @if (camOn)
@@ -58,7 +58,8 @@ else if (phase == Phase.Briefing)
             <p class="lobby-facts">
                 @L.T(Lang,
                     $"They read all {State.PageCount} pages and noted {session.Brief.KeyClaims.Count} key claims and {session.Brief.WeakSpots.Count} weak spots. Seven questions, about six to eight minutes.",
-                    $"Ils ont lu les {State.PageCount} pages et relevé {session.Brief.KeyClaims.Count} affirmations clés et {session.Brief.WeakSpots.Count} points faibles. Sept questions, environ six à huit minutes.")
+                    $"Ils ont lu les {State.PageCount} pages et relevé {session.Brief.KeyClaims.Count} affirmations clés et {session.Brief.WeakSpots.Count} points faibles. Sept questions, environ six à huit minutes.",
+                    $"قرأ الممتحنون كل الصفحات ({State.PageCount}) ودوّنوا {session.Brief.KeyClaims.Count} ادعاءات رئيسية و{session.Brief.WeakSpots.Count} نقاط ضعف. سبعة أسئلة، من ست إلى ثماني دقائق تقريباً.")
             </p>
             @if (State.Truncated)
             {
@@ -83,7 +84,7 @@ else if (phase == Phase.Briefing)
 else
 {
     var spot = Panel.Get(SpotlightId);
-    <section class="call">
+    <section class="call" dir="@L.Dir(Lang)" lang="@Lang">
         <header class="call-top">
             <div class="call-title">
                 <span class="live-dot" aria-hidden="true"></span>
@@ -271,7 +272,7 @@ else
     private string ProgressText()
     {
         var n = Math.Min(session!.Turns.Count + 1, Panel.TotalQuestions);
-        return L.T(Lang, $"Question {n} of {Panel.TotalQuestions}", $"Question {n} sur {Panel.TotalQuestions}");
+        return L.T(Lang, $"Question {n} of {Panel.TotalQuestions}", $"Question {n} sur {Panel.TotalQuestions}", $"السؤال {n} من {Panel.TotalQuestions}");
     }
 
     protected override void OnInitialized() => session = State.Current;
@@ -304,8 +305,8 @@ else
     {
         var name = thinkingExaminer is null ? "" : Panel.Get(thinkingExaminer).Name;
         return session!.Turns.Count == 0
-            ? L.T(Lang, $"{name} is opening the defense…", $"{name} ouvre la soutenance…")
-            : L.T(Lang, $"The panel is conferring. {name} will speak next…", $"Le jury se concerte. {name} va prendre la parole…");
+            ? L.T(Lang, $"{name} is opening the defense…", $"{name} ouvre la soutenance…", $"{name} يفتتح المناقشة…")
+            : L.T(Lang, $"The panel is conferring. {name} will speak next…", $"Le jury se concerte. {name} va prendre la parole…", $"اللجنة تتشاور. سيتحدث {name} بعد قليل…");
     }
 
     private async Task Begin()

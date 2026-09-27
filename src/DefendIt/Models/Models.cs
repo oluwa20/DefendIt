@@ -47,6 +47,16 @@ public static class Dimensions
         ["Clarity"] = "Clarté",
         ["Composure"] = "Aisance",
     };
+
+    public static readonly Dictionary<string, string> Arabic = new()
+    {
+        ["Problem & motivation"] = "المشكلة والدافع",
+        ["Methodology"] = "المنهجية",
+        ["Results & evidence"] = "النتائج والأدلة",
+        ["Originality"] = "الأصالة",
+        ["Clarity"] = "الوضوح",
+        ["Composure"] = "الثبات",
+    };
 }
 
 public static class Panel

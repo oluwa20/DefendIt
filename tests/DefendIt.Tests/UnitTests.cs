@@ -48,6 +48,22 @@ public class DeliveryMetricsTests
     }
 
     [Fact]
+    public void Counts_arabic_fillers()
+    {
+        var text = "يعني النموذج، امم، كان جيداً. طيب، يعني النتائج واضحة. التعليم ليس حشواً.";
+        Assert.Equal(4, DeliveryMetrics.CountFillers(text, "ar")); // يعني ×2, امم, طيب
+    }
+
+    [Fact]
+    public void Arabic_ui_strings_and_rtl()
+    {
+        Assert.Equal("ابدأ مناقشتي", L.T("ar", "Start my defense", "Commencer ma soutenance"));
+        Assert.Equal("Untranslated", L.T("ar", "Untranslated", "Non traduit")); // falls back to English
+        Assert.Equal("rtl", L.Dir("ar"));
+        Assert.Equal("ar-SA", L.SpeechLang("ar"));
+    }
+
+    [Fact]
     public void Computes_pace_from_spoken_answers_only()
     {
         var turns = new List<Turn>

@@ -8,12 +8,13 @@ public static partial class DeliveryMetrics
     // Multi-word fillers are matched as phrases; single words on word boundaries.
     private static readonly string[] En = ["um", "umm", "uh", "uhh", "erm", "like", "you know"];
     private static readonly string[] Fr = ["euh", "heu", "genre", "en fait", "du coup"];
+    private static readonly string[] Arb = ["يعني", "امم", "اممم", "آه", "اه", "طيب", "ايه"];
 
     public static int CountFillers(string text, string lang)
     {
         if (string.IsNullOrWhiteSpace(text)) return 0;
         var lower = text.ToLowerInvariant();
-        var list = lang == "fr" ? Fr : En;
+        var list = lang switch { "fr" => Fr, "ar" => Arb, _ => En };
         return list.Sum(f => Regex.Matches(lower, $@"(?<![\p{{L}}']){Regex.Escape(f)}(?![\p{{L}}'])").Count);
     }
 
