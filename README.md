@@ -92,7 +92,7 @@ In production set `Ai__Providers__0__ApiKey` etc. as environment variables (see 
 ## AI and tool disclosure
 
 - **Models.** NVIDIA Build `nvidia/nemotron-3-super-120b-a12b` is the primary for live questioning. Groq `openai/gpt-oss-120b` handles document analysis and evaluation, and is the fallback. Google Gemini `gemini-3.8-flash` and `gemini-flash-latest` are further fallbacks. All are called through OpenAI-compatible chat-completions APIs. NVIDIA Brev: not used.
-- **Voice.** The browser's Web Speech API (`SpeechSynthesis`, `SpeechRecognition`).
+- **Voice.** Examiner voices use neural text-to-speech: Groq `canopylabs/orpheus-v1-english` for English, Google `gemini-3.8-flash-tts` for English and French. The browser's `SpeechSynthesis` is the fallback. The student's speech is transcribed by the browser's `SpeechRecognition`. Audio is generated on the server; keys never reach the browser.
 - **PDF text extraction.** PdfPig. **Charts.** Chart.js.
 - **Build.** An AI coding assistant (Claude Code) was used to build this project.
 
