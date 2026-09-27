@@ -77,7 +77,7 @@
             drawn = true;
             var items = trend.Value.Items;
             await JS.InvokeVoidAsync("defendit.renderTrend", "trend",
-                items.Select(s => s.CreatedUtc.ToString("d MMM")).ToArray(),
+                items.Select((s, i) => $"Try {i + 1}").ToArray(),
                 items.Select(s => s.Report!.ReadinessScore).ToArray());
         }
     }

@@ -22,6 +22,20 @@ dotnet test                                           # 29 unit tests
 | 7 | **Mic denied / Firefox** | Type-instead path works | ✅ Full 7-question defense completed by typing in Chrome (automation run, report generated). If `SpeechRecognition` is missing (Firefox) the room starts in typing mode with a notice; if the mic is denied, `micPermission()` returns false and the room switches to typing |
 | 8 | **French session** | Questions and voice in French | ✅ Brief and questions in French, e.g. *"Dans l'introduction (p.1), vous soulignez la vulnérabilité des petits exploitants ghanéens ; pouvez-vous expliquer plus concrètement pourquoi votre approche par imagerie Sentinel-2 est la plus pertinente…"*. Speech uses `fr-FR` for synthesis and recognition |
 
+### Production run (https://defendit.onrender.com, Chrome)
+
+Full 7-question typed defense on the deployed app with `?simulateOutage=primary`:
+
+- NVIDIA was skipped. Every question was answered by the fallback, and the badge read "Fallback: Groq GPT-OSS 120B".
+- For the final evaluation, Groq was at its free-tier token cap. The chain went one step further, and the report was written by **Gemini Flash (backup)**.
+- Radar chart, inconsistencies with page references, per-question cards and prep plan all rendered.
+- The session was saved to localStorage and listed under *My sessions*.
+
+Bug found and fixed during deployment:
+
+- `blazor.web.js` returned 404 because a Docker restore/publish split drops the framework scripts in .NET 10. Switched to a single-step publish.
+- Home-page buttons could be clicked before the interactive connection existed. They are now disabled until the connection is ready.
+
 ### Golden test transcripts (the "wow" question, three independent runs)
 
 1. *"In the Abstract you claim 95% accuracy for the gradient-boosted model, but Table 4.2 shows XGBoost at 89.3%; can you explain this discrepancy?"*
