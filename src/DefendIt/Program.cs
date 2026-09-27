@@ -20,6 +20,9 @@ builder.Services.AddScoped<PanelService>();
 builder.Services.AddScoped<EvaluationService>();
 builder.Services.AddScoped<SessionState>();
 builder.Services.AddScoped<SessionStore>();
+builder.Services.Configure<TtsOptions>(builder.Configuration.GetSection("Tts"));
+builder.Services.AddSingleton<TtsService>();
+builder.Services.AddScoped<VoiceService>();
 
 builder.Services.Configure<Microsoft.AspNetCore.Builder.ForwardedHeadersOptions>(o =>
 {

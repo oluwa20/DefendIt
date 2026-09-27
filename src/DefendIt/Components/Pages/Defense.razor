@@ -5,6 +5,7 @@
 @inject EvaluationService Evaluator
 @inject SessionStore Store
 @inject LlmClient Llm
+@inject VoiceService Voice
 @inject IJSRuntime JS
 @inject NavigationManager Nav
 @inject ILogger<Defense> Log
@@ -18,156 +19,230 @@
         <p><a href="/">@L.T(Lang, "Upload a document to start one.", "Déposez un document pour en commencer une.")</a></p>
     </section>
 }
-else
+else if (phase == Phase.Briefing)
 {
-    <section class="room @(phase == Phase.Briefing ? "room-briefing" : "")">
-        <div class="room-top">
-            <div class="room-title">
-                <span class="room-doc">@session.Brief.Title</span>
-                @if (phase != Phase.Briefing)
-                {
-                    <span class="room-progress">@L.T(Lang, $"Question {Math.Min(session.Turns.Count + (current is null ? 0 : 1), Panel.TotalQuestions)} of {Panel.TotalQuestions}", $"Question {Math.Min(session.Turns.Count + (current is null ? 0 : 1), Panel.TotalQuestions)} sur {Panel.TotalQuestions}")</span>
-                }
-            </div>
-            @if (!string.IsNullOrEmpty(State.LastProvider))
-            {
-                <span class="provider-badge @(State.LastWasFallback ? "fallback" : "")" title="@L.T(Lang, "Which AI model answered the last request", "Modèle IA ayant répondu")">
-                    @(State.LastWasFallback ? L.T(Lang, "Fallback: ", "Secours : ") : L.T(Lang, "Answered by: ", "Répondu par : "))@State.LastProvider
-                </span>
-            }
-        </div>
-
-        <div class="jury">
-            @foreach (var e in Panel.Examiners)
-            {
-                var speaking = current is not null && current.ExaminerId == e.Id && (phase is Phase.Speaking or Phase.Listening or Phase.Typing);
-                var thinking = phase == Phase.Thinking && thinkingExaminer == e.Id;
-                <div class="tile @(speaking ? "active" : "") @(speaking && phase == Phase.Speaking ? "talking" : "") @(thinking ? "thinking" : "")" style="--seat:@e.Color">
-                    <div class="tile-avatar">@e.Initials</div>
-                    <div class="tile-name">@e.Name</div>
-                    <div class="tile-role">@RoleName(e.Id)</div>
-                </div>
-            }
-            <div class="tile tile-self @(phase == Phase.Listening ? "active listening" : "")">
+    @* ---------- Green room: the pre-call screen ---------- *@
+    <section class="lobby">
+        <div class="lobby-preview">
+            <div class="lobby-video @(camOn ? "on" : "")">
                 @if (camOn)
                 {
                     <video id="selfview" autoplay muted playsinline></video>
                 }
                 else
                 {
-                    <div class="tile-avatar self">@L.T(Lang, "You", "Vous")</div>
+                    <ExaminerAvatar Id="you" Label="You" />
+                    <span class="lobby-cam-off">@L.T(Lang, "Camera is off", "Caméra désactivée")</span>
                 }
-                <div class="tile-name">@L.T(Lang, "You", "Vous")</div>
-                <button class="tile-cam" @onclick="ToggleCamera">@(camOn ? L.T(Lang, "Hide camera", "Masquer la caméra") : L.T(Lang, "Show camera", "Afficher la caméra"))</button>
+                <div class="lobby-video-bar">
+                    <button class="round-btn @(camOn ? "" : "off")" @onclick="ToggleCamera" aria-label="@L.T(Lang, "Toggle camera", "Caméra")">
+                        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 7h12v10H3zM15 10l6-3v10l-6-3" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round" /></svg>
+                    </button>
+                </div>
+            </div>
+            <p class="muted small">@L.T(Lang, "Your camera is a mirror for you only. Nothing is recorded.", "Votre caméra n’est qu’un miroir. Rien n’est enregistré.")</p>
+        </div>
+
+        <div class="lobby-join">
+            <p class="lobby-doc">@session.Brief.Title</p>
+            <h1>@L.T(Lang, "The panel is ready for you.", "Le jury vous attend.")</h1>
+            <div class="lobby-panel">
+                @foreach (var e in Panel.Examiners)
+                {
+                    <div class="lobby-seat" style="--seat:@e.Color">
+                        <div class="lobby-face"><ExaminerAvatar Id="@e.Id" Label="@e.Name" /></div>
+                        <span>@e.Name</span>
+                    </div>
+                }
+            </div>
+            <p class="lobby-facts">
+                @L.T(Lang,
+                    $"They read all {State.PageCount} pages and noted {session.Brief.KeyClaims.Count} key claims and {session.Brief.WeakSpots.Count} weak spots. Seven questions, about six to eight minutes.",
+                    $"Ils ont lu les {State.PageCount} pages et relevé {session.Brief.KeyClaims.Count} affirmations clés et {session.Brief.WeakSpots.Count} points faibles. Sept questions, environ six à huit minutes.")
+            </p>
+            @if (State.Truncated)
+            {
+                <p class="notice">@L.T(Lang, "Long document: examiners focused on key chapters.", "Document long : le jury s’est concentré sur les chapitres clés.")</p>
+            }
+            <p class="notice">
+                @L.T(Lang,
+                    "Voice recognition uses your browser's speech service. Answer out loud; your mic stops after 4 seconds of silence. You can type instead at any time.",
+                    "La reconnaissance vocale utilise le service de votre navigateur. Répondez à voix haute ; le micro s’arrête après 4 secondes de silence. Vous pouvez aussi écrire.")
+            </p>
+            @if (!speechSupported)
+            {
+                <p class="notice warn">@L.T(Lang, "This browser has no speech recognition, so you will type your answers. Use Chrome for voice.", "Ce navigateur n’a pas de reconnaissance vocale : vous écrirez vos réponses. Utilisez Chrome pour la voix.")</p>
+            }
+            <div class="actions">
+                <button class="btn btn-primary btn-big" @onclick="Begin">@L.T(Lang, "Join the defense", "Rejoindre la soutenance")</button>
+                <label class="check"><input type="checkbox" @bind="typeMode" /> @L.T(Lang, "I'd rather type my answers", "Je préfère écrire mes réponses")</label>
+            </div>
+        </div>
+    </section>
+}
+else
+{
+    var spot = Panel.Get(SpotlightId);
+    <section class="call">
+        <header class="call-top">
+            <div class="call-title">
+                <span class="live-dot" aria-hidden="true"></span>
+                <span class="call-room">@L.T(Lang, "Defense room", "Salle de soutenance")</span>
+                <span class="call-doc">@session.Brief.Title</span>
+            </div>
+            <div class="call-progress" aria-label="@ProgressText()">
+                @for (var i = 0; i < Panel.TotalQuestions; i++)
+                {
+                    <span class="pip @(i < session.Turns.Count ? "done" : i == session.Turns.Count ? "now" : "")"></span>
+                }
+                <span class="call-progress-text">@ProgressText()</span>
+            </div>
+            <div class="call-meta">
+                <span class="clock" aria-label="Elapsed time">@Elapsed</span>
+                @if (!string.IsNullOrEmpty(State.LastProvider))
+                {
+                    <span class="provider-badge @(State.LastWasFallback ? "fallback" : "")" title="@L.T(Lang, "Which AI model answered the last request", "Modèle IA ayant répondu")">
+                        @(State.LastWasFallback ? L.T(Lang, "Fallback: ", "Secours : ") : L.T(Lang, "Answered by: ", "Répondu par : "))@State.LastProvider
+                    </span>
+                }
+            </div>
+        </header>
+
+        <div class="call-stage">
+            <div id="spotlight" class="spotlight @(IsSpeaking ? "talking" : "") @(phase == Phase.Thinking ? "thinking" : "")" style="--seat:@spot.Color">
+                <div class="spot-portrait"><ExaminerAvatar Id="@spot.Id" Label="@spot.Name" /></div>
+                <div class="nametag">
+                    <span class="nt-name">@spot.Name</span>
+                    <span class="nt-role">@RoleName(spot.Id)</span>
+                    @if (IsSpeaking)
+                    {
+                        <span class="eq" aria-hidden="true"><i></i><i></i><i></i></span>
+                    }
+                </div>
+                @if (current?.TargetArea == "Inconsistency" && phase is Phase.Speaking or Phase.Listening or Phase.Typing)
+                {
+                    <span class="flag">@L.T(Lang, "Inconsistency in your document", "Incohérence dans votre document")</span>
+                }
+
+                <div class="captions" aria-live="polite">
+                    @switch (phase)
+                    {
+                        case Phase.Thinking:
+                            <p class="cap cap-wait">@ThinkingText()</p>
+                            break;
+                        case Phase.Evaluating:
+                            <p class="cap cap-wait">@L.T(Lang, "The panel is deliberating on your defense…", "Le jury délibère…")</p>
+                            break;
+                        case Phase.Error:
+                            <div class="cap-error" role="alert">
+                                <p>@error</p>
+                                <button class="btn btn-light" @onclick="RetryLast">@L.T(Lang, "Try again", "Réessayer")</button>
+                            </div>
+                            break;
+                        default:
+                            @if (current is not null)
+                            {
+                                <p class="cap cap-q">
+                                    @if (current.IsFollowUp) { <span class="cap-tag">@L.T(Lang, "Follow-up", "Relance")</span> }
+                                    @current.Question
+                                </p>
+                                @if (phase == Phase.Listening && !string.IsNullOrWhiteSpace(transcript + interim))
+                                {
+                                    <p class="cap cap-you"><b>@L.T(Lang, "You", "Vous")</b> @transcript <span class="interim">@interim</span></p>
+                                }
+                            }
+                            break;
+                    }
+                </div>
+            </div>
+
+            <div class="filmstrip">
+                @foreach (var e in Panel.Examiners.Where(e => e.Id != SpotlightId))
+                {
+                    <div class="mini" style="--seat:@e.Color">
+                        <div class="mini-portrait"><ExaminerAvatar Id="@e.Id" Label="@e.Name" /></div>
+                        <span class="mini-name">@e.Name</span>
+                        @if (phase == Phase.Listening || phase == Phase.Typing)
+                        {
+                            <span class="mini-note" title="@L.T(Lang, "Taking notes", "Prend des notes")">✎</span>
+                        }
+                    </div>
+                }
+                <div id="selftile" class="mini self @(phase == Phase.Listening ? "listening" : "")">
+                    @if (camOn)
+                    {
+                        <video id="selfview" autoplay muted playsinline></video>
+                    }
+                    else
+                    {
+                        <div class="mini-portrait"><ExaminerAvatar Id="you" Label="You" /></div>
+                    }
+                    <span class="mini-name">@L.T(Lang, "You", "Vous")</span>
+                    <span class="mic-state @(phase == Phase.Listening ? "on" : "")" aria-hidden="true">
+                        <svg viewBox="0 0 24 24"><path d="M12 3a3 3 0 0 0-3 3v6a3 3 0 0 0 6 0V6a3 3 0 0 0-3-3zM5 11a7 7 0 0 0 14 0M12 18v3" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" /></svg>
+                    </span>
+                </div>
             </div>
         </div>
 
-        <div class="stage" aria-live="polite">
-            @switch (phase)
-            {
-                case Phase.Briefing:
-                    <div class="briefing">
-                        <h1>@L.T(Lang, "The panel has read your document.", "Le jury a lu votre document.")</h1>
-                        <p>
-                            @L.T(Lang,
-                                $"{State.PageCount} pages, {session.Brief.KeyClaims.Count} key claims noted, {session.Brief.WeakSpots.Count} weak spots flagged. Seven questions, about six to eight minutes.",
-                                $"{State.PageCount} pages, {session.Brief.KeyClaims.Count} affirmations clés relevées, {session.Brief.WeakSpots.Count} points faibles repérés. Sept questions, environ six à huit minutes.")
-                        </p>
-                        @if (State.Truncated)
-                        {
-                            <p class="notice">@L.T(Lang, "Long document: examiners focused on key chapters.", "Document long : le jury s’est concentré sur les chapitres clés.")</p>
-                        }
-                        <p class="notice">
-                            @L.T(Lang,
-                                "Voice recognition uses your browser's speech service. Answer out loud; the mic turns on after each question and stops after 4 seconds of silence. You can type instead at any time.",
-                                "La reconnaissance vocale utilise le service de votre navigateur. Répondez à voix haute ; le micro s’active après chaque question et s’arrête après 4 secondes de silence. Vous pouvez aussi écrire.")
-                        </p>
-                        @if (!speechSupported)
-                        {
-                            <p class="notice warn">@L.T(Lang, "This browser has no speech recognition. You will type your answers; use Chrome for voice.", "Ce navigateur n’a pas de reconnaissance vocale. Vous écrirez vos réponses ; utilisez Chrome pour la voix.")</p>
-                        }
-                        <div class="actions">
-                            <button class="btn btn-primary btn-big" @onclick="Begin">@L.T(Lang, "Begin the defense", "Commencer la soutenance")</button>
-                            <label class="check"><input type="checkbox" @bind="typeMode" /> @L.T(Lang, "I'd rather type my answers", "Je préfère écrire mes réponses")</label>
-                        </div>
-                    </div>
-                    break;
+        @if (phase == Phase.Typing)
+        {
+            <div class="type-panel">
+                <textarea class="answer-box" @bind="typed" @bind:event="oninput" rows="3"
+                          placeholder="@L.T(Lang, "Type your answer as you would say it.", "Écrivez votre réponse comme vous la diriez.")"></textarea>
+            </div>
+        }
 
-                case Phase.Thinking:
-                    <p class="caption caption-wait">@ThinkingText()</p>
-                    break;
-
-                case Phase.Speaking:
-                case Phase.Listening:
-                case Phase.Typing:
-                    @if (current is not null)
-                    {
-                        var ex = Panel.Get(current.ExaminerId);
-                        <div class="question">
-                            <div class="question-by" style="--seat:@ex.Color">
-                                @ex.Name@(current.IsFollowUp ? L.T(Lang, ", following up", ", relance") : "")
-                                @if (current.TargetArea == "Inconsistency")
-                                {
-                                    <span class="flag">@L.T(Lang, "Inconsistency in your document", "Incohérence dans votre document")</span>
-                                }
-                            </div>
-                            <p class="caption">@current.Question</p>
-                        </div>
-
-                        @if (phase == Phase.Listening)
-                        {
-                            <div class="answer live">
-                                <span class="mic-dot" aria-hidden="true"></span>
-                                <p>@(string.IsNullOrWhiteSpace(transcript + interim) ? L.T(Lang, "Listening… start speaking when ready.", "À l’écoute… parlez quand vous êtes prêt·e.") : transcript) <span class="interim">@interim</span></p>
-                            </div>
-                        }
-                        else if (phase == Phase.Typing)
-                        {
-                            <textarea class="answer-box" @bind="typed" @bind:event="oninput" rows="5"
-                                      placeholder="@L.T(Lang, "Type your answer as you would say it.", "Écrivez votre réponse comme vous la diriez.")"></textarea>
-                        }
-
-                        <div class="controls">
-                            @if (phase is Phase.Listening or Phase.Typing)
-                            {
-                                <button class="btn btn-primary" @onclick="DoneAnswering">@L.T(Lang, "Done answering", "J’ai terminé")</button>
-                            }
-                            @if (phase == Phase.Listening)
-                            {
-                                <button class="btn btn-quiet" @onclick="SwitchToTyping">@L.T(Lang, "Type instead", "Écrire plutôt")</button>
-                            }
-                            else if (phase == Phase.Typing && speechSupported && !micDenied)
-                            {
-                                <button class="btn btn-quiet" @onclick="SwitchToVoice">@L.T(Lang, "Answer by voice", "Répondre à voix haute")</button>
-                            }
-                            @if (phase == Phase.Speaking)
-                            {
-                                <button class="btn btn-quiet" @onclick="SkipSpeech">@L.T(Lang, "Skip to my answer", "Passer à ma réponse")</button>
-                            }
-                            else
-                            {
-                                <button class="btn btn-quiet" @onclick="Repeat">@L.T(Lang, "Repeat the question", "Répéter la question")</button>
-                            }
-                            @if (session.Turns.Count > 0)
-                            {
-                                <button class="btn btn-link" @onclick="EndEarly">@L.T(Lang, "End and get my report", "Terminer et voir mon rapport")</button>
-                            }
-                        </div>
-                    }
-                    break;
-
-                case Phase.Evaluating:
-                    <p class="caption caption-wait">@L.T(Lang, "The panel is deliberating on your defense…", "Le jury délibère…")</p>
-                    break;
-
-                case Phase.Error:
-                    <div class="alert" role="alert">
-                        <p>@error</p>
-                        <button class="btn btn-primary" @onclick="RetryLast">@L.T(Lang, "Try again", "Réessayer")</button>
-                    </div>
-                    break;
-            }
-        </div>
+        <footer class="call-controls">
+            <div class="cc-left">
+                @if (phase == Phase.Listening)
+                {
+                    <span class="status-live"><span class="mic-dot"></span>@L.T(Lang, "Listening", "À l’écoute") · @AnswerClock</span>
+                }
+                else if (phase == Phase.Typing)
+                {
+                    <span class="status-live typing">@L.T(Lang, "Typing", "Saisie") · @AnswerClock</span>
+                }
+                else if (phase == Phase.Speaking)
+                {
+                    <span class="status-live speaking">@spot.Name @L.T(Lang, "is speaking", "parle")</span>
+                }
+            </div>
+            <div class="cc-center">
+                @if (phase == Phase.Typing && speechSupported && !micDenied)
+                {
+                    <button class="round-btn" @onclick="SwitchToVoice" title="@L.T(Lang, "Answer by voice", "Répondre à voix haute")" aria-label="@L.T(Lang, "Answer by voice", "Répondre à voix haute")">
+                        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3a3 3 0 0 0-3 3v6a3 3 0 0 0 6 0V6a3 3 0 0 0-3-3zM5 11a7 7 0 0 0 14 0M12 18v3" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" /></svg>
+                    </button>
+                }
+                @if (phase == Phase.Listening)
+                {
+                    <button class="round-btn" @onclick="SwitchToTyping" title="@L.T(Lang, "Type instead", "Écrire plutôt")" aria-label="@L.T(Lang, "Type instead", "Écrire plutôt")">
+                        <svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="6" width="18" height="12" rx="2" fill="none" stroke="currentColor" stroke-width="2" /><path d="M7 10h1M11 10h1M15 10h1M8 14h8" stroke="currentColor" stroke-width="2" stroke-linecap="round" /></svg>
+                    </button>
+                }
+                <button class="round-btn @(camOn ? "" : "off")" @onclick="ToggleCamera" title="@L.T(Lang, "Camera", "Caméra")" aria-label="@L.T(Lang, "Toggle camera", "Caméra")">
+                    <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 7h12v10H3zM15 10l6-3v10l-6-3" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round" /></svg>
+                </button>
+                @if (phase is Phase.Listening or Phase.Typing)
+                {
+                    <button class="round-btn" @onclick="Repeat" title="@L.T(Lang, "Repeat the question", "Répéter la question")" aria-label="@L.T(Lang, "Repeat the question", "Répéter la question")">
+                        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 12a8 8 0 1 0 3-6.2M4 4v5h5" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" /></svg>
+                    </button>
+                    <button class="pill-btn primary" @onclick="DoneAnswering">@L.T(Lang, "Done answering", "J’ai terminé")</button>
+                }
+                @if (phase == Phase.Speaking)
+                {
+                    <button class="pill-btn" @onclick="SkipSpeech">@L.T(Lang, "Skip to my answer", "Passer à ma réponse")</button>
+                }
+            </div>
+            <div class="cc-right">
+                @if (session.Turns.Count > 0 && phase is not Phase.Evaluating)
+                {
+                    <button class="pill-btn danger" @onclick="EndEarly">@L.T(Lang, "End & get report", "Terminer")</button>
+                }
+            </div>
+        </footer>
     </section>
 }
 
@@ -182,11 +257,22 @@ else
     private bool typeMode, speechSupported = true, micDenied, camOn, camPending, disposed;
     private string? error;
     private Func<Task>? retryAction;
-    private DateTime answerStarted;
+    private DateTime answerStarted, callStarted;
     private DotNetObjectReference<Defense>? selfRef;
     private int speakToken;
+    private CancellationTokenSource? ticker;
 
     private string Lang => session?.Language ?? "en";
+    private bool IsSpeaking => phase == Phase.Speaking;
+    private string SpotlightId => current?.ExaminerId ?? thinkingExaminer ?? "supervisor";
+    private string Elapsed => callStarted == default ? "00:00" : (DateTime.UtcNow - callStarted).ToString(@"mm\:ss");
+    private string AnswerClock => (DateTime.UtcNow - answerStarted).ToString(@"m\:ss");
+
+    private string ProgressText()
+    {
+        var n = Math.Min(session!.Turns.Count + 1, Panel.TotalQuestions);
+        return L.T(Lang, $"Question {n} of {Panel.TotalQuestions}", $"Question {n} sur {Panel.TotalQuestions}");
+    }
 
     protected override void OnInitialized() => session = State.Current;
 
@@ -219,7 +305,7 @@ else
         var name = thinkingExaminer is null ? "" : Panel.Get(thinkingExaminer).Name;
         return session!.Turns.Count == 0
             ? L.T(Lang, $"{name} is opening the defense…", $"{name} ouvre la soutenance…")
-            : L.T(Lang, "The panel is conferring…", "Le jury se concerte…");
+            : L.T(Lang, $"The panel is conferring. {name} will speak next…", $"Le jury se concerte. {name} va prendre la parole…");
     }
 
     private async Task Begin()
@@ -229,7 +315,22 @@ else
             var ok = await JS.InvokeAsync<bool>("defendit.micPermission");
             if (!ok) { micDenied = true; typeMode = true; }
         }
+        callStarted = DateTime.UtcNow;
+        StartTicker();
+        if (camOn) camPending = true; // the video element moves into the call layout
         await AskNext();
+    }
+
+    private void StartTicker()
+    {
+        ticker = new CancellationTokenSource();
+        var token = ticker.Token;
+        _ = Task.Run(async () =>
+        {
+            using var t = new PeriodicTimer(TimeSpan.FromSeconds(1));
+            while (!token.IsCancellationRequested && await t.WaitForNextTickAsync(token))
+                await InvokeAsync(StateHasChanged);
+        }, token);
     }
 
     private async Task AskNext()
@@ -264,13 +365,12 @@ else
         transcript = interim = "";
         StateHasChanged();
         var token = ++speakToken;
-        var ex = Panel.Get(current.ExaminerId);
-        var voiceIndex = Panel.Examiners.IndexOf(ex);
         try
         {
-            await JS.InvokeAsync<bool>("defendit.speak", current.Question, L.SpeechLang(Lang), ex.VoicePitch, ex.VoiceRate, voiceIndex);
+            await Voice.SpeakAsync(Panel.Get(current.ExaminerId), current.Question, Lang, "spotlight");
         }
         catch (JSDisconnectedException) { return; }
+        catch (Exception ex) { Log.LogWarning(ex, "Speaking failed"); }
         if (token != speakToken || phase != Phase.Speaking) return; // skipped or repeated meanwhile
         await StartAnswering();
     }
@@ -287,20 +387,30 @@ else
             var started = await JS.InvokeAsync<bool>("defendit.startListening", selfRef, L.SpeechLang(Lang));
             phase = started ? Phase.Listening : Phase.Typing;
             if (!started) typeMode = true;
+            else await JS.InvokeAsync<bool>("defendit.startMicMeter", "selftile");
         }
         StateHasChanged();
+    }
+
+    private async Task StopMic()
+    {
+        await JS.InvokeVoidAsync("defendit.stopMicMeter", "selftile");
     }
 
     private async Task SkipSpeech()
     {
         speakToken++;
-        await JS.InvokeVoidAsync("defendit.stopSpeaking");
+        await Voice.StopAsync();
         await StartAnswering();
     }
 
     private async Task Repeat()
     {
-        if (phase == Phase.Listening) await JS.InvokeAsync<string>("defendit.stopListening");
+        if (phase == Phase.Listening)
+        {
+            await JS.InvokeAsync<string>("defendit.stopListening");
+            await StopMic();
+        }
         await SpeakCurrent();
     }
 
@@ -329,6 +439,7 @@ else
     private async Task SwitchToTyping()
     {
         var soFar = await JS.InvokeAsync<string>("defendit.stopListening");
+        await StopMic();
         typed = string.Join(" ", new[] { soFar, interim }.Where(s => !string.IsNullOrWhiteSpace(s))).Trim();
         interim = "";
         typeMode = true;
@@ -350,6 +461,7 @@ else
         if (phase == Phase.Listening)
         {
             var final = await JS.InvokeAsync<string>("defendit.stopListening");
+            await StopMic();
             answer = string.Join(" ", new[] { final, interim }.Where(s => !string.IsNullOrWhiteSpace(s))).Trim();
         }
         else answer = typed.Trim();
@@ -365,8 +477,9 @@ else
     private async Task EndEarly()
     {
         speakToken++;
-        await JS.InvokeVoidAsync("defendit.stopSpeaking");
+        await Voice.StopAsync();
         await JS.InvokeAsync<string>("defendit.stopListening");
+        await StopMic();
         current = null;
         await Finish();
     }
@@ -423,10 +536,12 @@ else
     public async ValueTask DisposeAsync()
     {
         disposed = true;
+        ticker?.Cancel();
         try
         {
-            await JS.InvokeVoidAsync("defendit.stopSpeaking");
+            await Voice.StopAsync();
             await JS.InvokeAsync<string>("defendit.stopListening");
+            await JS.InvokeVoidAsync("defendit.stopMicMeter", "selftile");
             await JS.InvokeVoidAsync("defendit.stopCamera");
         }
         catch (JSDisconnectedException) { }

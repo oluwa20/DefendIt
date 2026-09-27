@@ -15,7 +15,7 @@
         <div class="reading-seats">
             @foreach (var e in Panel.Examiners)
             {
-                <div class="seat-avatar" style="--seat:@e.Color">@e.Initials</div>
+                <div class="seat-avatar" style="--seat:@e.Color"><ExaminerAvatar Id="@e.Id" Label="@e.Name" /></div>
             }
         </div>
         <h2>@L.T(lang, "The panel is reading your document…", "Le jury lit votre document…")</h2>
@@ -34,17 +34,22 @@ else
             </p>
         </div>
 
-        <div class="jury-preview" aria-hidden="true">
-            @foreach (var e in Panel.Examiners)
-            {
-                <div class="jury-seat">
-                    <div class="seat-avatar" style="--seat:@e.Color">@e.Initials</div>
-                    <div>
-                        <strong>@e.Name</strong>
-                        <span>@ExaminerBlurb(e.Id)</span>
-                    </div>
+        <div class="room-preview" aria-hidden="true">
+            <div class="rp-top"><span class="live-dot"></span>@L.T(lang, "Defense room", "Salle de soutenance")<span class="rp-clock">04:12</span></div>
+            <div class="rp-stage">
+                <div class="rp-spot talking" style="--seat:#8a5a1f; --level:.55">
+                    <div class="spot-portrait"><ExaminerAvatar Id="external" Label="Prof. External" /></div>
+                    <div class="nametag"><span class="nt-name">Prof. External</span><span class="eq"><i></i><i></i><i></i></span></div>
+                    <div class="captions"><p class="cap cap-q">@L.T(lang,
+                        "Your abstract claims 95% accuracy, but Table 4.2 on page 6 shows 89.3%. Which figure is correct?",
+                        "Votre résumé annonce 95 % de précision, mais le tableau 4.2 page 6 indique 89,3 %. Quel chiffre est le bon ?")</p></div>
                 </div>
-            }
+                <div class="rp-strip">
+                    <div class="mini" style="--seat:#6e1f31"><div class="mini-portrait"><ExaminerAvatar Id="supervisor" Label="" /></div></div>
+                    <div class="mini" style="--seat:#2f3e6b"><div class="mini-portrait"><ExaminerAvatar Id="methodologist" Label="" /></div></div>
+                    <div class="mini self"><div class="mini-portrait"><ExaminerAvatar Id="you" Label="" /></div></div>
+                </div>
+            </div>
         </div>
     </section>
 
@@ -105,6 +110,22 @@ else
                 "Your document is processed in memory and never stored on our server. Saved reports stay on your device.",
                 "Votre document est traité en mémoire et jamais stocké sur notre serveur. Les rapports restent sur votre appareil.")
         </p>
+    </section>
+
+    <section class="panel-strip">
+        <h2>@L.T(lang, "Your panel", "Votre jury")</h2>
+        <div class="panel-grid">
+            @foreach (var e in Panel.Examiners)
+            {
+                <div class="panel-card" style="--seat:@e.Color">
+                    <div class="panel-face"><ExaminerAvatar Id="@e.Id" Label="@e.Name" /></div>
+                    <div>
+                        <h3>@e.Name</h3>
+                        <p>@ExaminerBlurb(e.Id)</p>
+                    </div>
+                </div>
+            }
+        </div>
     </section>
 }
 

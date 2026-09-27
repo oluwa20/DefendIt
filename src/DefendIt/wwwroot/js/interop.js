@@ -29,8 +29,54 @@ window.defendit = (() => {
     return s;
   }
 
+  // ---------- Volume meters: drive a --level CSS variable (0..1) on an element ----------
+  let audioCtx = null, currentAudio = null, meterRaf = null, fakeTimer = null;
+  function ctx() { audioCtx = audioCtx || new (window.AudioContext || window.webkitAudioContext)(); return audioCtx; }
+  function setLevel(id, v) { const el = id && document.getElementById(id); if (el) el.style.setProperty('--level', v.toFixed(3)); }
+  function meter(analyser, id) {
+    const buf = new Uint8Array(analyser.fftSize);
+    let smooth = 0;
+    const tick = () => {
+      analyser.getByteTimeDomainData(buf);
+      let sum = 0;
+      for (let i = 0; i < buf.length; i++) { const d = (buf[i] - 128) / 128; sum += d * d; }
+      const rms = Math.min(1, Math.sqrt(sum / buf.length) * 4);
+      smooth = smooth * 0.7 + rms * 0.3;
+      setLevel(id, smooth);
+      meterRaf = requestAnimationFrame(tick);
+    };
+    cancelAnimationFrame(meterRaf);
+    tick();
+  }
+  function stopMeter(id) { cancelAnimationFrame(meterRaf); clearInterval(fakeTimer); setLevel(id, 0); }
+
+  // Neural TTS audio from the server (bytes arrive as a Uint8Array).
+  function playAudio(bytes, mime, levelTarget) {
+    return new Promise(resolve => {
+      try {
+        stopSpeaking();
+        const url = URL.createObjectURL(new Blob([bytes], { type: mime }));
+        const audio = new Audio(url);
+        currentAudio = audio;
+        try {
+          const c = ctx();
+          if (c.state === 'suspended') c.resume();
+          const src = c.createMediaElementSource(audio);
+          const an = c.createAnalyser(); an.fftSize = 1024;
+          src.connect(an); an.connect(c.destination);
+          meter(an, levelTarget);
+        } catch { }
+        const finish = ok => { stopMeter(levelTarget); URL.revokeObjectURL(url); if (currentAudio === audio) currentAudio = null; resolve(ok); };
+        audio.onended = () => finish(true);
+        audio.onerror = () => finish(false);
+        audio.onpause = () => { if (!audio.ended) finish(true); };
+        audio.play().catch(() => finish(false));
+      } catch { resolve(false); }
+    });
+  }
+
   let keepAlive = null;
-  function speak(text, lang, pitch, rate, voiceIndex) {
+  function speak(text, lang, pitch, rate, voiceIndex, levelTarget) {
     return new Promise(resolve => {
       if (!window.speechSynthesis) { resolve(false); return; }
       speechSynthesis.cancel();
@@ -41,7 +87,13 @@ window.defendit = (() => {
       const v = pickVoice(lang, voiceIndex);
       if (v) u.voice = v;
       let done = false;
-      const finish = ok => { if (!done) { done = true; clearInterval(keepAlive); resolve(ok); } };
+      const finish = ok => { if (!done) { done = true; clearInterval(keepAlive); stopMeter(levelTarget); resolve(ok); } };
+      // Browser voices expose no audio stream: approximate the level from word boundaries.
+      let target = 0;
+      u.onboundary = () => { target = 0.55 + Math.random() * 0.4; };
+      clearInterval(fakeTimer);
+      let lv = 0;
+      fakeTimer = setInterval(() => { lv = lv * 0.6 + target * 0.4; target *= 0.75; setLevel(levelTarget, lv); }, 50);
       u.onend = () => finish(true);
       u.onerror = () => finish(false);
       // Chrome pauses long utterances after ~15s; nudge it.
@@ -52,7 +104,38 @@ window.defendit = (() => {
       speechSynthesis.speak(u);
     });
   }
-  function stopSpeaking() { if (window.speechSynthesis) speechSynthesis.cancel(); }
+  function stopSpeaking() {
+    if (window.speechSynthesis) speechSynthesis.cancel();
+    if (currentAudio) { try { currentAudio.pause(); } catch { } currentAudio = null; }
+  }
+
+  // Live mic level for the student's own tile (visual only; nothing is recorded or sent).
+  let micStream = null, micRaf = null;
+  async function startMicMeter(targetId) {
+    try {
+      stopMicMeter();
+      micStream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      const c = ctx(); if (c.state === 'suspended') await c.resume();
+      const an = c.createAnalyser(); an.fftSize = 1024;
+      c.createMediaStreamSource(micStream).connect(an);
+      const buf = new Uint8Array(an.fftSize); let smooth = 0;
+      const tick = () => {
+        an.getByteTimeDomainData(buf);
+        let sum = 0; for (let i = 0; i < buf.length; i++) { const d = (buf[i] - 128) / 128; sum += d * d; }
+        smooth = smooth * 0.7 + Math.min(1, Math.sqrt(sum / buf.length) * 5) * 0.3;
+        setLevel(targetId, smooth);
+        micRaf = requestAnimationFrame(tick);
+      };
+      tick();
+      return true;
+    } catch { return false; }
+  }
+  function stopMicMeter(targetId) {
+    cancelAnimationFrame(micRaf);
+    if (micStream) micStream.getTracks().forEach(t => t.stop());
+    micStream = null;
+    if (targetId) setLevel(targetId, 0);
+  }
 
   // ---------- Speech recognition ----------
   const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
@@ -112,7 +195,7 @@ window.defendit = (() => {
   let camStream = null;
   async function startCamera(videoId) {
     try {
-      camStream = await navigator.mediaDevices.getUserMedia({ video: true, audio: false });
+      if (!camStream || !camStream.active) camStream = await navigator.mediaDevices.getUserMedia({ video: true, audio: false });
       const el = document.getElementById(videoId);
       if (el) el.srcObject = camStream;
       return true;
@@ -206,7 +289,7 @@ window.defendit = (() => {
   function scrollToId(id) { document.getElementById(id)?.scrollIntoView({ behavior: 'smooth', block: 'start' }); }
 
   return {
-    speak, stopSpeaking, recognitionSupported, startListening, stopListening,
+    speak, playAudio, stopSpeaking, startMicMeter, stopMicMeter, recognitionSupported, startListening, stopListening,
     startCamera, stopCamera, micPermission,
     renderRadar, renderTrend,
     saveSession, getSession, listSessions, deleteSession, deleteAll,

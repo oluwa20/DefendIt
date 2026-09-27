@@ -4,6 +4,7 @@
 @inject SessionStore Store
 @inject EvaluationService Evaluator
 @inject IJSRuntime JS
+@inject VoiceService Voice
 @inject NavigationManager Nav
 @inject ILogger<Report> Log
 
@@ -250,8 +251,7 @@ else
         retryPhase = "speaking";
         StateHasChanged();
         var t = session!.Turns[i];
-        var ex = Panel.Get(t.ExaminerId);
-        await JS.InvokeAsync<bool>("defendit.speak", t.Question, L.SpeechLang(Lang), ex.VoicePitch, ex.VoiceRate, Panel.Examiners.IndexOf(ex));
+        await Voice.SpeakAsync(Panel.Get(t.ExaminerId), t.Question, Lang, $"q{i}");
         retryStarted = DateTime.UtcNow;
         var ok = await JS.InvokeAsync<bool>("defendit.startListening", selfRef, L.SpeechLang(Lang));
         retryPhase = ok ? "listening" : "typing";
@@ -316,7 +316,7 @@ else
     {
         try
         {
-            await JS.InvokeVoidAsync("defendit.stopSpeaking");
+            await Voice.StopAsync();
             await JS.InvokeAsync<string>("defendit.stopListening");
         }
         catch (JSDisconnectedException) { }

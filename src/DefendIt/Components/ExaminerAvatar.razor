@@ -1,0 +1,53 @@
+@* Illustrated portrait for an examiner (or the student placeholder). Pure SVG, no external assets. *@
+<svg class="portrait" viewBox="0 0 200 200" role="img" aria-label="@Label" preserveAspectRatio="xMidYMax meet">
+    @switch (Id)
+    {
+        case "supervisor":
+            @* Senior professor: long dark hair, burgundy jacket, warm brown skin *@
+            <path d="M58 96 C52 150 64 176 100 178 C136 176 148 150 142 96 C140 52 60 52 58 96 Z" fill="#2b1d1a" />
+            <path d="M24 200 C28 160 62 138 100 138 C138 138 172 160 176 200 Z" fill="#6e1f31" />
+            <path d="M86 138 L100 162 L114 138 Z" fill="#f1e6d6" />
+            <rect x="88" y="116" width="24" height="26" rx="8" fill="#8d5a3b" />
+            <ellipse cx="100" cy="92" rx="32" ry="38" fill="#9a6444" />
+            <path d="M66 86 C68 52 132 50 134 86 C124 70 104 64 84 70 C76 74 70 80 66 86 Z" fill="#2b1d1a" />
+            <circle cx="88" cy="94" r="3" fill="#2b1d1a" /><circle cx="112" cy="94" r="3" fill="#2b1d1a" />
+            <path d="M90 112 Q100 118 110 112" stroke="#5a3526" stroke-width="3" fill="none" stroke-linecap="round" />
+            break;
+        case "methodologist":
+            @* Methods expert: short hair, glasses, navy sweater, light skin *@
+            <path d="M24 200 C28 160 62 138 100 138 C138 138 172 160 176 200 Z" fill="#2f3e6b" />
+            <path d="M84 138 Q100 150 116 138 L116 146 Q100 158 84 146 Z" fill="#dfe3ee" />
+            <rect x="88" y="116" width="24" height="26" rx="8" fill="#d9a888" />
+            <ellipse cx="100" cy="92" rx="32" ry="38" fill="#e8b999" />
+            <path d="M67 84 C64 50 136 48 133 84 C128 66 112 60 96 62 C82 64 72 72 67 84 Z" fill="#6b4a2e" />
+            <circle cx="87" cy="94" r="11" fill="none" stroke="#1d1b26" stroke-width="3" />
+            <circle cx="113" cy="94" r="11" fill="none" stroke="#1d1b26" stroke-width="3" />
+            <line x1="98" y1="94" x2="102" y2="94" stroke="#1d1b26" stroke-width="3" />
+            <circle cx="87" cy="94" r="2.6" fill="#1d1b26" /><circle cx="113" cy="94" r="2.6" fill="#1d1b26" />
+            <path d="M92 114 L108 114" stroke="#a0674a" stroke-width="3" stroke-linecap="round" />
+            break;
+        case "external":
+            @* External examiner: grey hair and beard, ochre jacket, deep brown skin *@
+            <path d="M24 200 C28 160 62 138 100 138 C138 138 172 160 176 200 Z" fill="#8a5a1f" />
+            <path d="M86 138 L100 158 L114 138 Z" fill="#efe9dd" />
+            <rect x="88" y="116" width="24" height="26" rx="8" fill="#5a3a28" />
+            <ellipse cx="100" cy="92" rx="32" ry="38" fill="#6b442e" />
+            <path d="M70 100 C70 132 86 134 100 134 C114 134 130 132 130 100 C124 116 112 118 100 118 C88 118 76 116 70 100 Z" fill="#c9c4bb" />
+            <path d="M68 80 C70 56 130 54 132 80 C126 70 116 66 100 66 C84 66 74 70 68 80 Z" fill="#c9c4bb" />
+            <path d="M80 86 L94 84" stroke="#c9c4bb" stroke-width="4" stroke-linecap="round" />
+            <path d="M106 84 L120 86" stroke="#c9c4bb" stroke-width="4" stroke-linecap="round" />
+            <circle cx="88" cy="94" r="3" fill="#1d1b26" /><circle cx="112" cy="94" r="3" fill="#1d1b26" />
+            <path d="M92 116 L108 116" stroke="#3e2619" stroke-width="3" stroke-linecap="round" />
+            break;
+        default:
+            @* Student placeholder silhouette *@
+            <path d="M24 200 C28 160 62 138 100 138 C138 138 172 160 176 200 Z" fill="#3a3d4f" />
+            <ellipse cx="100" cy="90" rx="32" ry="38" fill="#4a4d61" />
+            break;
+    }
+</svg>
+
+@code {
+    [Parameter] public string Id { get; set; } = "";
+    [Parameter] public string Label { get; set; } = "";
+}
