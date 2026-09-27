@@ -1,0 +1,16 @@
+services:
+  - type: web
+    name: defendit
+    runtime: docker
+    plan: free
+    healthCheckPath: /healthz
+    envVars:
+      # Set these in the Render dashboard (never commit keys).
+      - key: Ai__Providers__0__ApiKey
+        sync: false
+      - key: Ai__Providers__1__ApiKey
+        sync: false
+      - key: Ai__Providers__2__ApiKey
+        sync: false
+      - key: Ai__Providers__3__ApiKey
+        sync: false
