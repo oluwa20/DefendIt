@@ -221,6 +221,27 @@ public class FailoverTests
     }
 
     [Fact]
+    public async Task Per_call_order_routes_to_preferred_provider()
+    {
+        var h = new FakeHandler((_, _) => Ok("{\"name\":\"ok\"}"));
+        var opts = new AiOptions
+        {
+            CallOrder = new() { ["analyze"] = ["groq"] },
+            Providers =
+            [
+                new() { Name = "nvidia", Label = "NVIDIA", BaseUrl = "https://primary.test/v1", Model = "m", ApiKey = "k" },
+                new() { Name = "groq", Label = "Groq", BaseUrl = "https://fallback1.test/v1", Model = "m", ApiKey = "k" },
+            ],
+        };
+        var c = new LlmClient(new HttpClient(h), Options.Create(opts), NullLogger<LlmClient>.Instance);
+        var a = await c.CompleteJsonAsync<Dto>("analyze", "s", "u");
+        var q = await c.CompleteJsonAsync<Dto>("next-question", "s", "u");
+        Assert.Equal("Groq", a.Provider);
+        Assert.False(a.IsFallback);
+        Assert.Equal("NVIDIA", q.Provider);
+    }
+
+    [Fact]
     public async Task All_down_throws_friendly_exception()
     {
         var h = new FakeHandler((_, _) => new HttpResponseMessage(HttpStatusCode.TooManyRequests));

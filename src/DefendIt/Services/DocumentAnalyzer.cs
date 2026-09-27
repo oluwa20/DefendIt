@@ -31,7 +31,8 @@ public class DocumentAnalyzer(LlmClient llm)
             - keyClaims: 6-10 of the most important claims, with exact numbers when the document gives them.
             - inconsistencies: actively hunt for contradictions between numbers, claims, tables and conclusions
               (e.g. abstract vs results table, claimed scope vs actual data, sample sizes that do not match,
-              conclusions not supported by the data). Compare every number stated in the abstract, introduction and
+              conclusions not supported by the data). Check scope too: compare the population, region, time period
+              and sample the conclusions generalize to with where the data actually came from. Compare every number stated in the abstract, introduction and
               conclusion with the numbers in the results and tables. Only report real contradictions you can point to
               in the text. If none exist, return an empty list. Do not invent.
             - weakSpots: 3-6 gaps a demanding examiner would attack (validity, sample size, baselines, generalization, ethics).

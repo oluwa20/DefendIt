@@ -15,12 +15,26 @@ public class ProviderOptions
     public string BaseUrl { get; set; } = "";
     public string Model { get; set; } = "";
     public string ApiKey { get; set; } = "";
+    /// <summary>Optional per-call model overrides, e.g. { "analyze": "big-reasoning-model" }.</summary>
+    public Dictionary<string, string> CallModels { get; set; } = [];
+
+    public string ModelFor(string call) => CallModels.TryGetValue(call, out var m) && !string.IsNullOrWhiteSpace(m) ? m : Model;
 }
 
 public class AiOptions
 {
     public List<ProviderOptions> Providers { get; set; } = [];
     public int TimeoutSeconds { get; set; } = 45;
+    /// <summary>Per-call timeouts. Live questions get a short one so a slow provider fails over before the silence gets awkward.</summary>
+    public Dictionary<string, int> CallTimeoutSeconds { get; set; } = [];
+    /// <summary>Optional per-call provider order by Name; providers not listed keep their config order after the listed ones.</summary>
+    public Dictionary<string, List<string>> CallOrder { get; set; } = [];
+
+    public List<ProviderOptions> OrderFor(string call)
+    {
+        if (!CallOrder.TryGetValue(call, out var order) || order.Count == 0) return Providers;
+        return Providers.OrderBy(p => { var i = order.IndexOf(p.Name); return i < 0 ? int.MaxValue : i; }).ToList();
+    }
     public double Temperature { get; set; } = 0.4;
     /// <summary>Config-level outage switch, e.g. "primary". The ?simulateOutage=primary query string does the same per session.</summary>
     public string? SimulateOutage { get; set; }
@@ -54,7 +68,8 @@ public class LlmClient(HttpClient http, IOptions<AiOptions> options, ILogger<Llm
 
     public async Task<LlmResult<T>> CompleteJsonAsync<T>(string callName, string system, string user, CancellationToken ct = default)
     {
-        var providers = _opt.Providers.Where(p => !string.IsNullOrWhiteSpace(p.ApiKey)).ToList();
+        var ordered = _opt.OrderFor(callName);
+        var providers = ordered.Where(p => !string.IsNullOrWhiteSpace(p.ApiKey)).ToList();
         if (providers.Count == 0)
             throw new AllProvidersFailedException("No AI provider is configured. Set at least one API key.");
 
@@ -65,7 +80,7 @@ public class LlmClient(HttpClient http, IOptions<AiOptions> options, ILogger<Llm
         for (var i = 0; i < providers.Count; i++)
         {
             var p = providers[i];
-            if (i == 0 && simulate && ReferenceEquals(p, _opt.Providers.FirstOrDefault()))
+            if (i == 0 && simulate && ReferenceEquals(p, ordered.FirstOrDefault()))
             {
                 logger.LogWarning("[LLM] {Call}: simulated outage on primary provider {Provider}", callName, p.Name);
                 errors.Add($"{p.Name}: simulated outage");
@@ -87,9 +102,9 @@ public class LlmClient(HttpClient http, IOptions<AiOptions> options, ILogger<Llm
                 int tokens;
                 try
                 {
-                    (raw, ms, tokens) = await SendAsync(p, messages, ct);
+                    (raw, ms, tokens) = await SendAsync(p, p.ModelFor(callName), messages, _opt.CallTimeoutSeconds.GetValueOrDefault(callName, _opt.TimeoutSeconds), ct);
                 }
-                catch (TransientException ex) when (!transientRetried)
+                catch (TransientException ex) when (!transientRetried && ex.Message != "timeout")
                 {
                     transientRetried = true;
                     logger.LogWarning("[LLM] {Call}: {Provider} transient failure ({Err}), retrying once", callName, p.Name, ex.Message);
@@ -108,7 +123,7 @@ public class LlmClient(HttpClient http, IOptions<AiOptions> options, ILogger<Llm
                     SessionTokens += tokens;
                     CallLog.Add((callName, p.Name, ms, tokens));
                     logger.LogInformation("[LLM] {Call}: answered by {Provider} ({Model}) in {Ms} ms, {Tokens} tokens",
-                        callName, p.Name, p.Model, ms, tokens);
+                        callName, p.Name, p.ModelFor(callName), ms, tokens);
                     return new LlmResult<T>(value!, string.IsNullOrEmpty(p.Label) ? p.Name : p.Label, i > 0, ms, tokens);
                 }
 
@@ -128,14 +143,14 @@ public class LlmClient(HttpClient http, IOptions<AiOptions> options, ILogger<Llm
         throw new AllProvidersFailedException("All AI providers failed: " + string.Join("; ", errors));
     }
 
-    private async Task<(string Content, long Ms, int Tokens)> SendAsync(ProviderOptions p, List<object> messages, CancellationToken ct)
+    private async Task<(string Content, long Ms, int Tokens)> SendAsync(ProviderOptions p, string model, List<object> messages, int timeoutSeconds, CancellationToken ct)
     {
         using var cts = CancellationTokenSource.CreateLinkedTokenSource(ct);
-        cts.CancelAfter(TimeSpan.FromSeconds(_opt.TimeoutSeconds));
+        cts.CancelAfter(TimeSpan.FromSeconds(timeoutSeconds));
 
         var body = JsonSerializer.Serialize(new
         {
-            model = p.Model,
+            model,
             messages,
             temperature = _opt.Temperature,
             max_tokens = 8000,
