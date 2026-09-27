@@ -138,7 +138,7 @@ public class LlmClient(HttpClient http, IOptions<AiOptions> options, ILogger<Llm
             model = p.Model,
             messages,
             temperature = _opt.Temperature,
-            max_tokens = 4096,
+            max_tokens = 8000,
         });
         using var req = new HttpRequestMessage(HttpMethod.Post, p.BaseUrl.TrimEnd('/') + "/chat/completions")
         {
