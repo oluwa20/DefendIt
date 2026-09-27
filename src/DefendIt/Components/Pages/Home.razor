@@ -50,7 +50,7 @@ else
 
     <section class="upload">
         <label class="dropzone @(fileName is null ? "" : "has-file")">
-            <InputFile OnChange="OnFile" accept="application/pdf,.pdf" />
+            <InputFile OnChange="OnFile" accept="application/pdf,.pdf" disabled="@(!RendererInfo.IsInteractive)" />
             @if (fileName is null)
             {
                 <span class="drop-title">@L.T(lang, "Drop your PDF here, or click to choose", "Déposez votre PDF ici, ou cliquez pour choisir")</span>
@@ -89,13 +89,17 @@ else
         }
 
         <div class="actions">
-            <button class="btn btn-primary btn-big" disabled="@(fileBytes is null)" @onclick="StartUploaded">
+            <button class="btn btn-primary btn-big" disabled="@(fileBytes is null || !RendererInfo.IsInteractive)" @onclick="StartUploaded">
                 @L.T(lang, "Start my defense", "Commencer ma soutenance")
             </button>
-            <button class="btn btn-quiet" @onclick="StartSample">
+            <button class="btn btn-quiet" disabled="@(!RendererInfo.IsInteractive)" @onclick="StartSample">
                 @L.T(lang, "Try with a sample thesis", "Essayer avec un mémoire d’exemple")
             </button>
         </div>
+        @if (!RendererInfo.IsInteractive)
+        {
+            <p class="muted small">@L.T(lang, "Connecting to the panel…", "Connexion au jury…")</p>
+        }
         <p class="privacy">
             @L.T(lang,
                 "Your document is processed in memory and never stored on our server. Saved reports stay on your device.",

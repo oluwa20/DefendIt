@@ -12,7 +12,8 @@ English and French.
 
 ## Try it
 
-- Live: _add Render URL_
+- **Live:** https://defendit.onrender.com (free hosting: the first visit after idle can take ~1 minute to wake up)
+- **Source:** https://github.com/oluwa20/DefendIt
 - No PDF handy? Click **Try with a sample thesis**. It contains two planted flaws the panel is built to catch.
 - Use Chrome for voice. Every answer can also be typed.
 
