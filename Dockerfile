@@ -1,9 +1,9 @@
 FROM mcr.microsoft.com/dotnet/sdk:10.0 AS build
 WORKDIR /src
-COPY src/DefendIt/DefendIt.csproj src/DefendIt/
-RUN dotnet restore src/DefendIt/DefendIt.csproj
 COPY src/ src/
-RUN dotnet publish src/DefendIt/DefendIt.csproj -c Release -o /app --no-restore
+# Single-step publish: a separate restore + "publish --no-restore" drops the Blazor
+# framework scripts (_framework/blazor.web.js) from the output in .NET 10.
+RUN dotnet publish src/DefendIt/DefendIt.csproj -c Release -o /app
 
 FROM mcr.microsoft.com/dotnet/aspnet:10.0
 WORKDIR /app
