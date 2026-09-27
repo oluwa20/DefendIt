@@ -1,0 +1,325 @@
+@page "/report/{Id}"
+@implements IAsyncDisposable
+@inject SessionState State
+@inject SessionStore Store
+@inject EvaluationService Evaluator
+@inject IJSRuntime JS
+@inject NavigationManager Nav
+@inject ILogger<Report> Log
+
+<PageTitle>@L.T(Lang, "Defense report", "Rapport de soutenance") — DefendIt</PageTitle>
+
+@if (loading)
+{
+    <section class="narrow"><p class="muted">@L.T(Lang, "Opening your report…", "Ouverture du rapport…")</p></section>
+}
+else if (session?.Report is null)
+{
+    <section class="narrow">
+        <h1>@L.T(Lang, "Report not found", "Rapport introuvable")</h1>
+        <p>@L.T(Lang, "It may have been deleted from this device.", "Il a peut-être été supprimé de cet appareil.") <a href="/history">@L.T(Lang, "See my sessions", "Voir mes sessions")</a></p>
+    </section>
+}
+else
+{
+    var r = session.Report;
+    <article class="report">
+        <header class="report-head">
+            <div>
+                <p class="report-doc">@session.Brief.Title</p>
+                <h1 class="score-line"><span class="score">@r.ReadinessScore</span><span class="score-of">/100</span> @L.T(Lang, "ready", "prêt")</h1>
+                <p class="verdict">@r.Verdict</p>
+                <p class="muted small">@session.CreatedUtc.ToLocalTime().ToString("d MMM yyyy, HH:mm") · @(Lang == "fr" ? "Français" : "English") · @DifficultyName(session.Difficulty) · @L.T(Lang, "evaluated by", "évalué par") @r.ProviderUsed</p>
+            </div>
+            <div class="radar-wrap">
+                <canvas id="radar" aria-label="@L.T(Lang, "Radar chart of six defense dimensions", "Graphique radar des six dimensions")" role="img"></canvas>
+            </div>
+        </header>
+
+        <ul class="dims">
+            @foreach (var d in r.Dimensions)
+            {
+                <li><span>@DimLabel(d.Key)</span><meter min="0" max="10" value="@d.Value"></meter><b>@d.Value</b></li>
+            }
+        </ul>
+
+        @if (session.Brief.Inconsistencies.Count > 0)
+        {
+            <section class="block">
+                <h2>@L.T(Lang, "Inconsistencies the panel found", "Incohérences relevées par le jury")</h2>
+                <p class="muted">@L.T(Lang, "Fix these in the document or prepare an explanation. A real jury will notice.", "Corrigez-les dans le document ou préparez une explication. Un vrai jury les remarquera.")</p>
+                <ul class="incons">
+                    @foreach (var i in session.Brief.Inconsistencies)
+                    {
+                        <li class="sev-@(i.Severity?.ToLowerInvariant())">
+                            <p>@i.Description</p>
+                            <p class="where">@i.LocationA ↔ @i.LocationB <span class="sev">@SeverityName(i.Severity)</span></p>
+                        </li>
+                    }
+                </ul>
+            </section>
+        }
+
+        <section class="block">
+            <h2>@L.T(Lang, "Question by question", "Question par question")</h2>
+            @for (var idx = 0; idx < r.Feedback.Count && idx < session.Turns.Count; idx++)
+            {
+                var i = idx;
+                var f = r.Feedback[i];
+                var t = session.Turns[i];
+                var ex = Panel.Get(t.ExaminerId);
+                <div class="qcard" id="q@(i)">
+                    <div class="qcard-head">
+                        <span class="qby" style="--seat:@ex.Color">@ex.Name@(t.IsFollowUp ? L.T(Lang, " (follow-up)", " (relance)") : "")</span>
+                        <span class="qscore s@(f.Score >= 7 ? "hi" : f.Score >= 4 ? "mid" : "lo")">@f.Score/10</span>
+                    </div>
+                    <p class="qtext">@t.Question</p>
+                    <details>
+                        <summary>@L.T(Lang, "Your answer", "Votre réponse")</summary>
+                        <p class="yours">@(string.IsNullOrWhiteSpace(t.Answer) ? L.T(Lang, "(no answer)", "(pas de réponse)") : t.Answer)</p>
+                    </details>
+                    <dl>
+                        <dt>@L.T(Lang, "What worked", "Ce qui a fonctionné")</dt><dd>@f.WhatWorked</dd>
+                        <dt>@L.T(Lang, "What was missing", "Ce qui manquait")</dt><dd>@f.WhatWasMissing</dd>
+                        <dt>@L.T(Lang, "A stronger answer", "Une réponse plus solide")</dt><dd class="stronger">@f.StrongerAnswer</dd>
+                    </dl>
+
+                    @if (retryIndex == i)
+                    {
+                        <div class="retry-box">
+                            @if (retryPhase == "speaking")
+                            {
+                                <p class="muted">@ex.Name @L.T(Lang, "is asking again…", "repose la question…")</p>
+                            }
+                            else if (retryPhase == "listening")
+                            {
+                                <p class="answer live"><span class="mic-dot"></span> @(string.IsNullOrWhiteSpace(retryText + retryInterim) ? L.T(Lang, "Listening…", "À l’écoute…") : retryText) <span class="interim">@retryInterim</span></p>
+                                <button class="btn btn-primary" @onclick="RetryDone">@L.T(Lang, "Done answering", "J’ai terminé")</button>
+                                <button class="btn btn-quiet" @onclick="RetryType">@L.T(Lang, "Type instead", "Écrire plutôt")</button>
+                            }
+                            else if (retryPhase == "typing")
+                            {
+                                <textarea class="answer-box" rows="4" @bind="retryText" @bind:event="oninput"></textarea>
+                                <button class="btn btn-primary" @onclick="RetryDone">@L.T(Lang, "Done answering", "J’ai terminé")</button>
+                            }
+                            else if (retryPhase == "scoring")
+                            {
+                                <p class="muted">@L.T(Lang, "Re-scoring your answer…", "Nouvelle évaluation…")</p>
+                            }
+                            else if (retryPhase == "error")
+                            {
+                                <p class="alert">@L.T(Lang, "The examiners could not be reached. Try again.", "Les examinateurs sont injoignables. Réessayez.")</p>
+                                <button class="btn btn-quiet" @onclick="RetryDone">@L.T(Lang, "Try again", "Réessayer")</button>
+                            }
+                        </div>
+                    }
+                    else if (retryIndex is null)
+                    {
+                        <button class="btn btn-quiet btn-small" @onclick="() => StartRetry(i)">@L.T(Lang, "Retry this question", "Retenter cette question")</button>
+                    }
+                    @if (improved.TryGetValue(i, out var before))
+                    {
+                        <p class="improved">@L.T(Lang, $"Retried: {before}/10 → {f.Score}/10", $"Nouvel essai : {before}/10 → {f.Score}/10")</p>
+                    }
+                </div>
+            }
+        </section>
+
+        <section class="block two-col">
+            <div>
+                <h2>@L.T(Lang, "How you sounded", "Votre expression orale")</h2>
+                <dl class="delivery">
+                    <dt>@L.T(Lang, "Pace", "Débit")</dt>
+                    <dd>@(r.Delivery.WordsPerMinute > 0 ? $"{r.Delivery.WordsPerMinute:0} {L.T(Lang, "words per minute", "mots par minute")}" : L.T(Lang, "n/a (typed answers)", "n/d (réponses écrites)")) <span class="muted">@PaceHint(r.Delivery.WordsPerMinute)</span></dd>
+                    <dt>@L.T(Lang, "Filler words", "Mots de remplissage")</dt>
+                    <dd>@r.Delivery.FillerWords <span class="muted">@(Lang == "fr" ? "(euh, genre, en fait, du coup)" : "(um, uh, like, you know)")</span></dd>
+                    <dt>@L.T(Lang, "Average answer", "Réponse moyenne")</dt>
+                    <dd>@r.Delivery.AvgAnswerSeconds.ToString("0") s <span class="muted">@L.T(Lang, "(aim for 45–90 s)", "(visez 45–90 s)")</span></dd>
+                </dl>
+                <h2>@L.T(Lang, "Top risks", "Risques principaux")</h2>
+                <ul class="risks">
+                    @foreach (var risk in r.TopRisks) { <li>@risk</li> }
+                </ul>
+            </div>
+            <div>
+                <h2>@L.T(Lang, "Your prep plan", "Votre plan de préparation")</h2>
+                <ol class="plan">
+                    @foreach (var step in r.PrepPlan) { <li>@step</li> }
+                </ol>
+            </div>
+        </section>
+
+        <p class="disclaimer">@L.T(Lang, "AI feedback is practice guidance, not an official grade. Your jury decides.", "Ce retour IA est un entraînement, pas une note officielle. Votre jury décide.")</p>
+
+        <div class="actions no-print">
+            <button class="btn btn-primary" @onclick="Save">@(saved ? L.T(Lang, "Saved on this device", "Enregistré sur cet appareil") : L.T(Lang, "Save", "Enregistrer"))</button>
+            <button class="btn btn-quiet" @onclick='() => JS.InvokeVoidAsync("defendit.printPage")'>@L.T(Lang, "Print or save as PDF", "Imprimer ou PDF")</button>
+            <a class="btn btn-quiet" href="/">@L.T(Lang, "New defense", "Nouvelle soutenance")</a>
+            @if (confirmDelete)
+            {
+                <button class="btn btn-danger" @onclick="Delete">@L.T(Lang, "Yes, delete it", "Oui, supprimer")</button>
+                <button class="btn btn-link" @onclick="() => confirmDelete = false">@L.T(Lang, "Cancel", "Annuler")</button>
+            }
+            else
+            {
+                <button class="btn btn-link" @onclick="() => confirmDelete = true">@L.T(Lang, "Delete this session", "Supprimer cette session")</button>
+            }
+        </div>
+    </article>
+}
+
+@code {
+    [Parameter] public string Id { get; set; } = "";
+
+    private DefenseSession? session;
+    private bool loading = true, chartDrawn, saved = true, confirmDelete;
+    private int? retryIndex;
+    private string retryPhase = "", retryText = "", retryInterim = "";
+    private DateTime retryStarted;
+    private readonly Dictionary<int, int> improved = [];
+    private DotNetObjectReference<Report>? selfRef;
+
+    private string Lang => session?.Language ?? "en";
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (firstRender)
+        {
+            selfRef = DotNetObjectReference.Create(this);
+            session = State.Current?.Id == Id && State.Current.Report is not null ? State.Current : await Store.GetAsync(Id);
+            loading = false;
+            StateHasChanged();
+            return;
+        }
+        if (!chartDrawn && session?.Report is not null)
+        {
+            chartDrawn = true;
+            await DrawChart();
+        }
+    }
+
+    private async Task DrawChart()
+    {
+        var r = session!.Report!;
+        var labels = Dimensions.Keys.Select(DimLabel).ToArray();
+        var values = Dimensions.Keys.Select(k => r.Dimensions.GetValueOrDefault(k)).ToArray();
+        await JS.InvokeVoidAsync("defendit.renderRadar", "radar", labels, values);
+    }
+
+    private string DimLabel(string key) => Lang == "fr" ? Dimensions.French.GetValueOrDefault(key, key) : key;
+
+    private string DifficultyName(string d) => d switch
+    {
+        "gentle" => L.T(Lang, "supportive jury", "jury bienveillant"),
+        "tough" => L.T(Lang, "tough jury", "jury exigeant"),
+        _ => L.T(Lang, "realistic jury", "jury réaliste"),
+    };
+
+    private string SeverityName(string? s) => (s ?? "").ToLowerInvariant() switch
+    {
+        "high" => L.T(Lang, "high", "élevée"),
+        "medium" => L.T(Lang, "medium", "moyenne"),
+        _ => L.T(Lang, "low", "faible"),
+    };
+
+    private string PaceHint(double wpm) => wpm switch
+    {
+        0 => "",
+        < 100 => L.T(Lang, "(a little slow; 120–160 is comfortable)", "(un peu lent ; 120–160 est confortable)"),
+        > 175 => L.T(Lang, "(fast; slow down for the jury)", "(rapide ; ralentissez pour le jury)"),
+        _ => L.T(Lang, "(comfortable pace)", "(débit confortable)"),
+    };
+
+    private async Task Save()
+    {
+        saved = await Store.SaveAsync(session!);
+    }
+
+    private async Task Delete()
+    {
+        await Store.DeleteAsync(session!.Id);
+        if (State.Current?.Id == session.Id) State.Current = null;
+        Nav.NavigateTo("/history");
+    }
+
+    // ----- Retry this question -----
+    private async Task StartRetry(int i)
+    {
+        retryIndex = i;
+        retryText = retryInterim = "";
+        retryPhase = "speaking";
+        StateHasChanged();
+        var t = session!.Turns[i];
+        var ex = Panel.Get(t.ExaminerId);
+        await JS.InvokeAsync<bool>("defendit.speak", t.Question, L.SpeechLang(Lang), ex.VoicePitch, ex.VoiceRate, Panel.Examiners.IndexOf(ex));
+        retryStarted = DateTime.UtcNow;
+        var ok = await JS.InvokeAsync<bool>("defendit.startListening", selfRef, L.SpeechLang(Lang));
+        retryPhase = ok ? "listening" : "typing";
+        StateHasChanged();
+    }
+
+    [JSInvokable]
+    public Task OnTranscript(string final, string interim)
+    {
+        retryText = final;
+        retryInterim = interim;
+        return InvokeAsync(StateHasChanged);
+    }
+
+    [JSInvokable]
+    public Task OnSilence() => InvokeAsync(async () => { if (retryPhase == "listening") await RetryDone(); });
+
+    [JSInvokable]
+    public Task OnSpeechError(string err) => InvokeAsync(async () => await RetryType());
+
+    private async Task RetryType()
+    {
+        var soFar = await JS.InvokeAsync<string>("defendit.stopListening");
+        retryText = (soFar + " " + retryInterim).Trim();
+        retryInterim = "";
+        retryPhase = "typing";
+        StateHasChanged();
+    }
+
+    private async Task RetryDone()
+    {
+        if (retryIndex is not { } i || session?.Report is null) return;
+        if (retryPhase == "listening")
+        {
+            var final = await JS.InvokeAsync<string>("defendit.stopListening");
+            retryText = (final + " " + retryInterim).Trim();
+        }
+        retryPhase = "scoring";
+        StateHasChanged();
+        try
+        {
+            var old = session.Turns[i];
+            var turn = old with { Answer = retryText, AnswerSeconds = Math.Round((DateTime.UtcNow - retryStarted).TotalSeconds, 1) };
+            var res = await Evaluator.RescoreOneAsync(session, turn);
+            var before = session.Report.Feedback[i].Score;
+            session.Turns[i] = turn;
+            session.Report.Feedback[i] = res.Value;
+            improved.TryAdd(i, before);
+            saved = await Store.SaveAsync(session);
+            retryIndex = null;
+            retryPhase = "";
+        }
+        catch (Exception ex)
+        {
+            Log.LogError(ex, "Retry scoring failed");
+            retryPhase = "error";
+        }
+        StateHasChanged();
+    }
+
+    public async ValueTask DisposeAsync()
+    {
+        try
+        {
+            await JS.InvokeVoidAsync("defendit.stopSpeaking");
+            await JS.InvokeAsync<string>("defendit.stopListening");
+        }
+        catch (JSDisconnectedException) { }
+        selfRef?.Dispose();
+    }
+}

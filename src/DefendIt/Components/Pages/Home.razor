@@ -1,0 +1,214 @@
+@page "/"
+@inject PdfTextService Pdf
+@inject DocumentAnalyzer Analyzer
+@inject SessionState State
+@inject LlmClient Llm
+@inject NavigationManager Nav
+@inject IWebHostEnvironment Env
+@inject ILogger<Home> Log
+
+<PageTitle>DefendIt — rehearse your defense</PageTitle>
+
+@if (busy)
+{
+    <section class="reading" aria-live="polite">
+        <div class="reading-seats">
+            @foreach (var e in Panel.Examiners)
+            {
+                <div class="seat-avatar" style="--seat:@e.Color">@e.Initials</div>
+            }
+        </div>
+        <h2>@L.T(lang, "The panel is reading your document…", "Le jury lit votre document…")</h2>
+        <p class="muted">@status</p>
+    </section>
+}
+else
+{
+    <section class="hero">
+        <div class="hero-copy">
+            <h1>@L.T(lang, "Rehearse your defense before it counts.", "Répétez votre soutenance avant le jour J.")</h1>
+            <p class="lede">
+                @L.T(lang,
+                    "Upload your thesis or project report. Three AI examiners read all of it, then question you out loud — following up when you dodge, and pointing out where your own document contradicts itself.",
+                    "Déposez votre mémoire ou rapport. Trois examinateurs IA le lisent en entier, puis vous interrogent à voix haute — en relançant quand vous esquivez, et en relevant les contradictions de votre propre document.")
+            </p>
+        </div>
+
+        <div class="jury-preview" aria-hidden="true">
+            @foreach (var e in Panel.Examiners)
+            {
+                <div class="jury-seat">
+                    <div class="seat-avatar" style="--seat:@e.Color">@e.Initials</div>
+                    <div>
+                        <strong>@e.Name</strong>
+                        <span>@ExaminerBlurb(e.Id)</span>
+                    </div>
+                </div>
+            }
+        </div>
+    </section>
+
+    <section class="upload">
+        <label class="dropzone @(fileName is null ? "" : "has-file")">
+            <InputFile OnChange="OnFile" accept="application/pdf,.pdf" />
+            @if (fileName is null)
+            {
+                <span class="drop-title">@L.T(lang, "Drop your PDF here, or click to choose", "Déposez votre PDF ici, ou cliquez pour choisir")</span>
+                <span class="muted">@L.T(lang, "Text-based PDF, up to 20 MB", "PDF avec texte, 20 Mo maximum")</span>
+            }
+            else
+            {
+                <span class="drop-title">@fileName</span>
+                <span class="muted">@L.T(lang, "Ready. Click to choose another file.", "Prêt. Cliquez pour choisir un autre fichier.")</span>
+            }
+        </label>
+
+        <div class="options">
+            <fieldset class="toggle" aria-label="Language">
+                <legend>@L.T(lang, "Defense language", "Langue de la soutenance")</legend>
+                <button type="button" class="@(lang == "en" ? "on" : "")" aria-pressed="@(lang == "en")" @onclick='() => lang = "en"'>English</button>
+                <button type="button" class="@(lang == "fr" ? "on" : "")" aria-pressed="@(lang == "fr")" @onclick='() => lang = "fr"'>Français</button>
+            </fieldset>
+            <fieldset class="toggle" aria-label="Jury">
+                <legend>@L.T(lang, "Jury temperament", "Tempérament du jury")</legend>
+                <button type="button" class="@(difficulty == "gentle" ? "on" : "")" aria-pressed="@(difficulty == "gentle")" @onclick='() => difficulty = "gentle"'>@L.T(lang, "Supportive", "Bienveillant")</button>
+                <button type="button" class="@(difficulty == "standard" ? "on" : "")" aria-pressed="@(difficulty == "standard")" @onclick='() => difficulty = "standard"'>@L.T(lang, "Realistic", "Réaliste")</button>
+                <button type="button" class="@(difficulty == "tough" ? "on" : "")" aria-pressed="@(difficulty == "tough")" @onclick='() => difficulty = "tough"'>@L.T(lang, "Tough", "Exigeant")</button>
+            </fieldset>
+        </div>
+
+        @if (error is not null)
+        {
+            <div class="alert" role="alert">
+                <p>@error</p>
+                @if (canRetry)
+                {
+                    <button class="btn btn-quiet" @onclick="Retry">@L.T(lang, "Try again", "Réessayer")</button>
+                }
+            </div>
+        }
+
+        <div class="actions">
+            <button class="btn btn-primary btn-big" disabled="@(fileBytes is null)" @onclick="StartUploaded">
+                @L.T(lang, "Start my defense", "Commencer ma soutenance")
+            </button>
+            <button class="btn btn-quiet" @onclick="StartSample">
+                @L.T(lang, "Try with a sample thesis", "Essayer avec un mémoire d’exemple")
+            </button>
+        </div>
+        <p class="privacy">
+            @L.T(lang,
+                "Your document is processed in memory and never stored on our server. Saved reports stay on your device.",
+                "Votre document est traité en mémoire et jamais stocké sur notre serveur. Les rapports restent sur votre appareil.")
+        </p>
+    </section>
+}
+
+@code {
+    private const long MaxBytes = 20 * 1024 * 1024;
+    private string lang = "en";
+    private string difficulty = "standard";
+    private string? fileName;
+    private byte[]? fileBytes;
+    private bool busy;
+    private string status = "";
+    private string? error;
+    private bool canRetry;
+    private Func<Task>? lastAction;
+
+    protected override void OnInitialized()
+    {
+        var uri = Nav.ToAbsoluteUri(Nav.Uri);
+        var q = Microsoft.AspNetCore.WebUtilities.QueryHelpers.ParseQuery(uri.Query);
+        if (q.TryGetValue("simulateOutage", out var v) && v == "primary") Llm.SimulatePrimaryOutage = true;
+        if (q.TryGetValue("lang", out var l) && l == "fr") lang = "fr";
+    }
+
+    private string ExaminerBlurb(string id) => id switch
+    {
+        "supervisor" => L.T(lang, "Motivation, objectives, contribution", "Motivation, objectifs, contribution"),
+        "methodologist" => L.T(lang, "Design, data, validity, metrics", "Protocole, données, validité, métriques"),
+        _ => L.T(lang, "What is new, limits, and your contradictions", "La nouveauté, les limites, vos contradictions"),
+    };
+
+    private async Task OnFile(InputFileChangeEventArgs e)
+    {
+        error = null;
+        var f = e.File;
+        if (f.Size > MaxBytes)
+        {
+            error = L.T(lang, "This file is larger than 20 MB. Upload a smaller PDF.", "Ce fichier dépasse 20 Mo. Choisissez un PDF plus léger.");
+            fileBytes = null; fileName = null;
+            return;
+        }
+        using var ms = new MemoryStream();
+        await f.OpenReadStream(MaxBytes).CopyToAsync(ms);
+        fileBytes = ms.ToArray();
+        fileName = f.Name;
+    }
+
+    private Task StartUploaded() => fileBytes is null ? Task.CompletedTask : Run(() => Analyze(fileBytes));
+
+    private Task StartSample() => Run(async () =>
+    {
+        var path = Path.Combine(Env.WebRootPath, "samples", lang == "fr" ? "sample-thesis-fr.pdf" : "sample-thesis.pdf");
+        if (!File.Exists(path)) path = Path.Combine(Env.WebRootPath, "samples", "sample-thesis.pdf");
+        await Analyze(await File.ReadAllBytesAsync(path));
+    });
+
+    private Task Retry() => lastAction is null ? Task.CompletedTask : Run(lastAction);
+
+    private async Task Run(Func<Task> action)
+    {
+        lastAction = action;
+        error = null;
+        canRetry = false;
+        busy = true;
+        StateHasChanged();
+        try
+        {
+            await action();
+        }
+        catch (NoReadableTextException)
+        {
+            error = L.T(lang, "This PDF has no readable text — upload a text-based PDF.", "Ce PDF ne contient pas de texte lisible — déposez un PDF avec du texte (pas un scan).");
+        }
+        catch (InvalidDataException)
+        {
+            error = L.T(lang, "This file could not be read as a PDF. Check it opens in a PDF reader and try again.", "Ce fichier n’a pas pu être lu comme un PDF. Vérifiez qu’il s’ouvre correctement puis réessayez.");
+        }
+        catch (AllProvidersFailedException ex)
+        {
+            Log.LogError(ex, "Analysis failed");
+            error = L.T(lang, "The examiners could not be reached right now. Wait a few seconds, then try again.", "Les examinateurs sont injoignables pour le moment. Patientez quelques secondes puis réessayez.");
+            canRetry = true;
+        }
+        catch (Exception ex)
+        {
+            Log.LogError(ex, "Unexpected analysis error");
+            error = L.T(lang, "Something unexpected went wrong while reading your document. Try again.", "Une erreur inattendue s’est produite pendant la lecture. Réessayez.");
+            canRetry = true;
+        }
+        finally
+        {
+            busy = false;
+        }
+    }
+
+    private async Task Analyze(byte[] bytes)
+    {
+        status = L.T(lang, "Extracting the text, page by page.", "Extraction du texte, page par page.");
+        StateHasChanged();
+        var doc = await Task.Run(() => Pdf.Extract(new MemoryStream(bytes)));
+
+        status = L.T(lang, $"{doc.PageCount} pages. Checking your numbers, claims and tables against each other.",
+            $"{doc.PageCount} pages. Vérification croisée de vos chiffres, affirmations et tableaux.");
+        StateHasChanged();
+
+        var brief = await Analyzer.AnalyzeAsync(doc, lang);
+        State.Track(brief);
+        var session = new DefenseSession(Guid.NewGuid().ToString("N")[..12], DateTime.UtcNow, lang, difficulty, brief.Value, [], null);
+        State.Start(session, doc);
+        Nav.NavigateTo("/defense");
+    }
+}

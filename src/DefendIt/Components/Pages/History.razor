@@ -1,0 +1,92 @@
+@page "/history"
+@inject SessionStore Store
+@inject IJSRuntime JS
+
+<PageTitle>My sessions — DefendIt</PageTitle>
+
+<section class="narrow">
+    <h1>My sessions</h1>
+    <p class="muted">Saved in this browser only. Nothing is kept on our server.</p>
+
+    @if (sessions is null)
+    {
+        <p class="muted">Loading…</p>
+    }
+    else if (sessions.Count == 0)
+    {
+        <div class="empty">
+            <p>No saved defenses yet. Each defense you finish is saved here automatically.</p>
+            <a class="btn btn-primary" href="/">Start a defense</a>
+        </div>
+    }
+    else
+    {
+        @if (trend is not null)
+        {
+            <div class="trend">
+                <h2>Progress on “@trend.Value.Title”</h2>
+                <canvas id="trend" height="110" role="img" aria-label="Readiness score over time"></canvas>
+            </div>
+        }
+
+        <ul class="sessions">
+            @foreach (var s in sessions)
+            {
+                <li>
+                    <a href="/report/@s.Id">
+                        <span class="s-title">@s.Brief.Title</span>
+                        <span class="s-meta">@s.CreatedUtc.ToLocalTime().ToString("d MMM yyyy, HH:mm") · @(s.Language == "fr" ? "Français" : "English")</span>
+                        <span class="s-score">@(s.Report?.ReadinessScore.ToString() ?? "–")<small>/100</small></span>
+                    </a>
+                </li>
+            }
+        </ul>
+
+        <div class="actions">
+            @if (confirm)
+            {
+                <span>This removes every saved report from this browser.</span>
+                <button class="btn btn-danger" @onclick="DeleteAll">Delete everything</button>
+                <button class="btn btn-link" @onclick="() => confirm = false">Cancel</button>
+            }
+            else
+            {
+                <button class="btn btn-link" @onclick="() => confirm = true">Delete all my data</button>
+            }
+        </div>
+    }
+</section>
+
+@code {
+    private List<DefenseSession>? sessions;
+    private (string Title, List<DefenseSession> Items)? trend;
+    private bool confirm, drawn;
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (firstRender)
+        {
+            sessions = (await Store.ListAsync()).Where(s => s.Report is not null).ToList();
+            var group = sessions.GroupBy(s => s.Brief.Title).Where(g => g.Count() >= 2).OrderByDescending(g => g.Count()).FirstOrDefault();
+            if (group is not null) trend = (group.Key, group.OrderBy(s => s.CreatedUtc).ToList());
+            StateHasChanged();
+            return;
+        }
+        if (!drawn && trend is not null)
+        {
+            drawn = true;
+            var items = trend.Value.Items;
+            await JS.InvokeVoidAsync("defendit.renderTrend", "trend",
+                items.Select(s => s.CreatedUtc.ToLocalTime().ToString("d MMM HH:mm")).ToArray(),
+                items.Select(s => s.Report!.ReadinessScore).ToArray());
+        }
+    }
+
+    private async Task DeleteAll()
+    {
+        await Store.DeleteAllAsync();
+        sessions = [];
+        trend = null;
+        confirm = false;
+    }
+}
