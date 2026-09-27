@@ -35,7 +35,7 @@
                 <li>
                     <a href="/report/@s.Id">
                         <span class="s-title">@s.Brief.Title</span>
-                        <span class="s-meta">@s.CreatedUtc.ToLocalTime().ToString("d MMM yyyy, HH:mm") · @(s.Language == "fr" ? "Français" : "English")</span>
+                        <span class="s-meta">@s.CreatedUtc.ToString("d MMM yyyy") · @(s.Language == "fr" ? "Français" : "English")</span>
                         <span class="s-score">@(s.Report?.ReadinessScore.ToString() ?? "–")<small>/100</small></span>
                     </a>
                 </li>
@@ -77,7 +77,7 @@
             drawn = true;
             var items = trend.Value.Items;
             await JS.InvokeVoidAsync("defendit.renderTrend", "trend",
-                items.Select(s => s.CreatedUtc.ToLocalTime().ToString("d MMM HH:mm")).ToArray(),
+                items.Select(s => s.CreatedUtc.ToString("d MMM")).ToArray(),
                 items.Select(s => s.Report!.ReadinessScore).ToArray());
         }
     }

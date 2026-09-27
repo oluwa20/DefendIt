@@ -80,7 +80,8 @@ public class LlmClient(HttpClient http, IOptions<AiOptions> options, ILogger<Llm
         for (var i = 0; i < providers.Count; i++)
         {
             var p = providers[i];
-            if (i == 0 && simulate && ReferenceEquals(p, ordered.FirstOrDefault()))
+            // "primary" always means the configured primary (Providers[0]), whatever the call's routing order.
+            if (simulate && ReferenceEquals(p, _opt.Providers.FirstOrDefault()))
             {
                 logger.LogWarning("[LLM] {Call}: simulated outage on primary provider {Provider}", callName, p.Name);
                 errors.Add($"{p.Name}: simulated outage");

@@ -29,7 +29,7 @@ else
                 <p class="report-doc">@session.Brief.Title</p>
                 <h1 class="score-line"><span class="score">@r.ReadinessScore</span><span class="score-of">/100</span> @L.T(Lang, "ready", "prêt")</h1>
                 <p class="verdict">@r.Verdict</p>
-                <p class="muted small">@session.CreatedUtc.ToLocalTime().ToString("d MMM yyyy, HH:mm") · @(Lang == "fr" ? "Français" : "English") · @DifficultyName(session.Difficulty) · @L.T(Lang, "evaluated by", "évalué par") @r.ProviderUsed</p>
+                <p class="muted small">@session.CreatedUtc.ToString("d MMM yyyy") · @(Lang == "fr" ? "Français" : "English") · @DifficultyName(session.Difficulty) · @L.T(Lang, "evaluated by", "évalué par") @r.ProviderUsed</p>
             </div>
             <div class="radar-wrap">
                 <canvas id="radar" aria-label="@L.T(Lang, "Radar chart of six defense dimensions", "Graphique radar des six dimensions")" role="img"></canvas>
